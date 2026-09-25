@@ -12,6 +12,7 @@ const NAV = [
   { to: '/vehicles', label: 'Vehicles' },
   { to: '/trips', label: 'Trips' },
   { to: '/drivers', label: 'Drivers' },
+  { to: '/fuel', label: 'Fuel' },
   { to: '/maintenance', label: 'Maintenance' },
   { to: '/settings', label: 'Settings' },
 ];

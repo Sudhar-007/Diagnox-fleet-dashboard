@@ -26,6 +26,9 @@ export function createScenarioService({ sim, enabled, restrictedZoneFor = () => 
     if (typeof truck !== 'string' || !sim.truckIds().includes(truck)) {
       throw new ScenarioError(400, `${truck} is not a simulated truck`);
     }
+    if (base.needs === 'fuel_sensor' && !sim.hasFuelSensor?.(truck)) {
+      throw new ScenarioError(409, `${truck} has no fuel sensor; fuel theft shows only on a measured level (try TN01)`);
+    }
     let def = base;
     let target = null;
     if (base.needs === 'restricted_zone') {

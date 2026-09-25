@@ -81,6 +81,24 @@ export const SCENARIOS = {
     },
   },
 
+  // Needs a truck with a fuel sensor (sim FUEL_SENSOR_TRUCKS): an estimate cannot show a theft.
+  fuel_theft: {
+    label: 'Fuel theft',
+    default_truck: 'TN01',
+    duration_s: 90,
+    needs: 'fuel_sensor',
+    description: 'The truck pulls over and stops; about 36 L (12 % of a 300 L tank) is drained over 30 s, then it drives on.',
+    // Slows at 3 km/h per second (not a collision), switches the engine off while parked (so
+    // the stop is not idling), then drives on.
+    speedAt(t, speed) {
+      if (t < 30) return Math.max(0, speed - 3);
+      if (t < 80) return 0;
+      return undefined;
+    },
+    engineOff: (t) => t >= 32 && t < 78,
+    fuelLossPct: (t) => (t >= 40 && t < 70 ? 0.4 : 0),
+  },
+
   // Needs a target: the scenario service passes the nearest restricted zone to build().
   geofence_breach: {
     label: 'Geofence breach',

@@ -225,3 +225,18 @@ test('drivers: add onto a truck, move, edit, remove', () => {
   assert.equal(reg.listTrucks().find((t) => t.truck_id === 'TN03').driver_id, null);
   assert.throws(() => reg.removeDriver(d.driver_id), /unknown driver/);
 });
+
+test('refuels: validated against the truck, newest first, removable', () => {
+  const reg = createRegistry({ storage: createMemoryStorage(), log: { error() {}, warn() {} } });
+  const now = parseTs('2026-09-10T12:00:00');
+  const a = reg.addRefuel({ truck_id: 'TN01', litres: 120, cost_inr: 11_000, at: '2026-09-10T09:30' }, now);
+  assert.equal(a.at, '2026-09-10T09:30:00');
+  const b = reg.addRefuel({ truck_id: 'TN01', litres: '40' }, now);
+  assert.equal(b.at, '2026-09-10T12:00:00', 'defaults to now');
+  assert.deepEqual(reg.listRefuels({ truck_id: 'TN01' }).map((r) => r.id), [b.id, a.id]);
+  assert.throws(() => reg.addRefuel({ truck_id: 'TN01', litres: 301 }, now), /litres/);
+  assert.throws(() => reg.addRefuel({ truck_id: 'NOPE', litres: 10 }, now), /unknown truck/);
+  assert.throws(() => reg.addRefuel({ truck_id: 'TN01', litres: 10, at: '2026-09-10T13:00' }, now), /future/);
+  reg.removeRefuel(a.id);
+  assert.equal(reg.listRefuels().length, 1);
+});

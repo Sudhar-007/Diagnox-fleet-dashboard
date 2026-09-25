@@ -28,7 +28,12 @@ let tripLive = null;
 export function beginTripResync() {
   tripLive = new Map();
   drivingLive = new Map();
+  fuelLive = new Map();
 }
+
+// Fuel anomalies seen since the current resync began, replayed over the REST list.
+let fuelLive = null;
+const FUEL_EVENT_LIMIT = 200;
 
 // Driver events seen since the current resync began, replayed over the REST list.
 let drivingLive = null;
@@ -40,6 +45,11 @@ function newerEvent(existing, incoming) {
   if (!existing.ongoing) return false;
   return !incoming.ongoing || incoming.end_ms >= existing.end_ms;
 }
+
+const fuelEventList = (byId) =>
+  Object.values(byId)
+    .sort((a, b) => b.start_ms - a.start_ms)
+    .slice(0, FUEL_EVENT_LIMIT);
 
 // Newest first by start, capped.
 const eventList = (byId) =>
@@ -137,6 +147,9 @@ export const useFleetStore = create((set) => ({
   trips: null,
   // Driver behaviour events, newest first; null until the first load.
   driverEvents: null,
+  // Fuel theft / refuel anomalies, newest first; null until the first load.
+  fuelEvents: null,
+  fuelRules: null,
   syncError: null,
   now: Date.now(),
 
@@ -229,6 +242,31 @@ export const useFleetStore = create((set) => ({
       byId[event.id] = event;
       return { driverEvents: eventList(byId) };
     });
+  },
+  // Full fuel snapshot after a (re)connect: rules and anomalies (levels come with the trucks).
+  applyFuel: ({ rules, events }) => {
+    const byId = Object.fromEntries(events.map((e) => [e.id, e]));
+    for (const [id, e] of fuelLive ?? []) if (newerEvent(byId[id], e)) byId[id] = e;
+    fuelLive = null;
+    set({ fuelRules: rules, fuelEvents: fuelEventList(byId) });
+  },
+  applyFuelEvent: ({ event }) => {
+    if (fuelLive && newerEvent(fuelLive.get(event.id), event)) fuelLive.set(event.id, event);
+    set((s) => {
+      if (!s.fuelEvents) return {};
+      const existing = s.fuelEvents.find((e) => e.id === event.id);
+      if (!newerEvent(existing, event)) return {};
+      const byId = Object.fromEntries(s.fuelEvents.map((e) => [e.id, e]));
+      byId[event.id] = event;
+      return { fuelEvents: fuelEventList(byId) };
+    });
+  },
+  // A manager refuel changed the estimate before the truck's next reading. A queued update sent
+  // before the refuel must not put the old level back.
+  applyFuelLevel: ({ truck_id, fuel }) => {
+    const queued = pending.get(truck_id);
+    if (queued) pending.set(truck_id, { ...queued, fuel });
+    set((s) => (s.trucks[truck_id] ? { trucks: { ...s.trucks, [truck_id]: { ...s.trucks[truck_id], fuel } } } : {}));
   },
   setHealthRules: (healthRules) => {
     rulesAppliedAt = Date.now();

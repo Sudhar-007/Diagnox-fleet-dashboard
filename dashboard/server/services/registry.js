@@ -80,6 +80,7 @@ export function createRegistry({ storage, log = console }) {
   }
   let services = safeLoad('service_records') ?? [];
   let assignments = safeLoad('trip_assignments') ?? [];
+  let refuels = safeLoad('refuels') ?? [];
 
   const commit = {
     trucks(next) {
@@ -97,6 +98,10 @@ export function createRegistry({ storage, log = console }) {
     assignments(next) {
       storage.save('trip_assignments', next);
       assignments = next;
+    },
+    refuels(next) {
+      storage.save('refuels', next);
+      refuels = next;
     },
   };
 
@@ -278,6 +283,39 @@ export function createRegistry({ storage, log = console }) {
       const record = { id: newId('P'), ...fields, created_at: formatTs(nowMs) };
       commit.assignments([...assignments, record]);
       return { ...record, driver_name: findDriver(driver_id)?.name ?? null };
+    },
+
+    // Newest refuel first.
+    listRefuels({ truck_id } = {}) {
+      const out = truck_id ? refuels.filter((r) => r.truck_id === truck_id) : refuels;
+      return [...out].sort((a, b) => b.at.localeCompare(a.at) || b.created_at.localeCompare(a.created_at));
+    },
+
+    // at: when the fuel went in (defaults to now); not in the future, at most the tank size.
+    addRefuel(body = {}, nowMs = Date.now()) {
+      const truck_id = typeof body.truck_id === 'string' ? body.truck_id.trim() : '';
+      const truck = findTruck(truck_id);
+      if (!truck) bad(`unknown truck ${truck_id}`.trim());
+      const at = body.at == null || body.at === '' ? formatTs(nowMs).slice(0, 16) + ':00' : datetime(body.at, 'at', nowMs);
+      if (parseTs(at) > nowMs + 60_000) bad('at cannot be in the future');
+      const record = {
+        id: newId('R'),
+        truck_id,
+        litres: number(body.litres, 'litres', 1, truck.tank_capacity_l, { required: true }),
+        cost_inr: number(body.cost_inr, 'cost_inr', 0, 1_000_000),
+        at,
+        notes: text(body.notes, 'notes', 300),
+        by: text(body.by, 'by', 60),
+        source: 'manager',
+        created_at: nowTs(),
+      };
+      commit.refuels([...refuels, record]);
+      return record;
+    },
+
+    removeRefuel(id) {
+      if (!refuels.some((r) => r.id === id)) throw new RegistryError(404, `unknown refuel ${id}`);
+      commit.refuels(refuels.filter((r) => r.id !== id));
     },
 
     removeAssignment(id) {

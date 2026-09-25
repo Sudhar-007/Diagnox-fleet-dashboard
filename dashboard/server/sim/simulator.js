@@ -1,3 +1,6 @@
+import { DEFAULT_TANK_CAPACITY_L } from '../config/fleet.js';
+import { rules } from '../config/rules.js';
+import { burnRateLph } from '../engine/fuel.js';
 import { haversine, lerp } from '../engine/geo.js';
 import { formatTs } from '../engine/time.js';
 
@@ -26,6 +29,14 @@ const ARRIVE_KMH = 8;
 const IDLE_RPM = 750;
 const ENGINE_OFF_AFTER_S = 20;
 const ENGINE_OFF_DWELL_S = 120;
+
+// Simulated trucks fitted with a fuel level sensor: they send fuel_level, burning at the same
+// rate as the dashboard's estimate. The others send none, so the dashboard estimates theirs.
+export const FUEL_SENSOR_TRUCKS = ['TN01'];
+// Demo values: a sensor truck starts full and, below REFILL_BELOW_PCT, is refilled during a long
+// depot stop at REFILL_PCT_S (about 1.5 L/s on a 300 L tank).
+const REFILL_BELOW_PCT = 25;
+const REFILL_PCT_S = 0.5;
 
 function segmentOf(truck) {
   const n = truck.route.length;
@@ -60,7 +71,8 @@ function initTruck(truck_id, route, index) {
 function advanceForced(truck, dt, speed) {
   const prevSpeed = truck.speed;
   truck.phase = 'drive';
-  truck.engineOn = true;
+  // A scenario may park the truck with the engine off.
+  truck.engineOn = !truck.scenario?.def.engineOff?.(truck.scenario.tRel);
   truck.speed = clamp(speed, 0, 120);
   truck.dist += (truck.speed / 3.6) * dt;
   let { length } = segmentOf(truck);
@@ -169,8 +181,27 @@ function readings(truck, prevSpeed, dt, timestamp) {
   };
 }
 
-export function createSimulator({ routes, truckIds = Object.keys(routes) }) {
-  const trucks = truckIds.map((id, i) => initTruck(id, routes[id], i));
+// Fuel sensor reading of a truck that has one: burns like the dashboard's estimate, loses what a
+// running scenario drains, and refills during a long depot stop when low.
+function updateFuel(truck, point, dt) {
+  if (truck.fuelPct == null) return;
+  const capacity = DEFAULT_TANK_CAPACITY_L;
+  truck.fuelPct -= ((burnRateLph(point, rules.fuel) * dt) / 3600 / capacity) * 100;
+  const sc = truck.scenario;
+  if (sc?.def.fuelLossPct) truck.fuelPct -= sc.def.fuelLossPct(sc.tRel) * dt;
+  const depotStop = truck.phase === 'dwell' && truck.route[truck.seg].dwell_s >= ENGINE_OFF_DWELL_S;
+  if (!depotStop) truck.refilling = false;
+  else if (truck.fuelPct < REFILL_BELOW_PCT) truck.refilling = true;
+  if (truck.refilling) {
+    truck.fuelPct += REFILL_PCT_S * dt;
+    if (truck.fuelPct >= 100) truck.refilling = false;
+  }
+  truck.fuelPct = clamp(truck.fuelPct, 0, 100);
+  point.fuel_level = round(truck.fuelPct, 1);
+}
+
+export function createSimulator({ routes, truckIds = Object.keys(routes), fuelSensors = FUEL_SENSOR_TRUCKS }) {
+  const trucks = truckIds.map((id, i) => ({ ...initTruck(id, routes[id], i), fuelPct: fuelSensors.includes(id) ? 100 : null, refilling: false }));
   const byId = new Map(trucks.map((t) => [t.truck_id, t]));
   let timer = null;
 
@@ -185,6 +216,7 @@ export function createSimulator({ routes, truckIds = Object.keys(routes) }) {
       const sc = truck.scenario;
       const prevSpeed = advance(truck, dt);
       const point = readings(truck, prevSpeed, dt, timestamp);
+      updateFuel(truck, point, dt);
       if (sc?.def.apply) sc.def.apply(sc.tRel, point);
       if (sc?.def.silent?.(sc.tRel)) continue;
       out.push(point);
@@ -194,6 +226,7 @@ export function createSimulator({ routes, truckIds = Object.keys(routes) }) {
 
   return {
     truckIds: () => trucks.map((t) => t.truck_id),
+    hasFuelSensor: (truck_id) => byId.get(truck_id)?.fuelPct != null,
     step,
     // Runs a scenario definition (see sim/scenarios.js) on one truck from startMs.
     inject(truck_id, def, startMs) {

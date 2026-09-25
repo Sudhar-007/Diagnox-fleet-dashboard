@@ -12,6 +12,7 @@ import Sparkline from '../components/Sparkline.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import TriggerSosButton from '../components/TriggerSosButton.jsx';
 import TripTable from '../components/TripTable.jsx';
+import { TruckFuel } from './Fuel.jsx';
 import Button from '../components/ui/Button.jsx';
 import Panel from '../components/ui/Panel.jsx';
 import Tabs, { TabPanel } from '../components/ui/Tabs.jsx';
@@ -220,7 +221,7 @@ function Header({ truck, reg, truckId }) {
   );
 }
 
-const TAB_IDS = ['health', 'maintenance', 'trips'];
+const TAB_IDS = ['health', 'maintenance', 'trips', 'fuel'];
 
 export default function VehicleDetails() {
   const { truckId } = useParams();
@@ -266,6 +267,7 @@ export default function VehicleDetails() {
             { id: 'health', label: 'Health' },
             { id: 'maintenance', label: 'Maintenance' },
             { id: 'trips', label: 'Trips' },
+            { id: 'fuel', label: 'Fuel' },
           ]}
         />
         <TabPanel id={tab}>
@@ -277,6 +279,7 @@ export default function VehicleDetails() {
             ))}
           {tab === 'maintenance' && <MaintenanceTab truck={truck} truckId={truckId} />}
           {tab === 'trips' && <TripsTab truckId={truckId} />}
+          {tab === 'fuel' && <TruckFuel truckId={truckId} truck={truck} />}
         </TabPanel>
       </div>
     </div>

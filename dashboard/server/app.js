@@ -10,6 +10,7 @@ import { createGeofences } from './services/geofences.js';
 import { createRuleSettings } from './services/ruleSettings.js';
 import { createTripService } from './services/trips.js';
 import { createDrivingService } from './services/driving.js';
+import { createFuelService } from './services/fuel.js';
 import { createMemoryStorage } from './services/storage.js';
 import { createAlertService } from './services/alerts.js';
 import { createScenarioService } from './services/scenarios.js';
@@ -25,6 +26,7 @@ import { registryRouter } from './routes/registry.js';
 import { settingsRouter } from './routes/settings.js';
 import { tripsRouter } from './routes/trips.js';
 import { drivingRouter } from './routes/driving.js';
+import { fuelRouter } from './routes/fuel.js';
 
 // Wires store, engines, REST and Socket.IO around a telemetry source.
 // `makeSource(onPoints)` must return { start, stop, mode, requestedMode } and, when it runs
@@ -52,7 +54,8 @@ export function createServer({
     zones: geofences.list,
     onVisit: (visit) => io.emit('zone:visit', visit),
   });
-  const fleet = createFleet({ store, rules, registry, zonesInside: alerts.zonesInside });
+  const fuel = createFuelService({ rules, capacityOf: (id) => registry.truckInfo(id).tank_capacity_l });
+  const fleet = createFleet({ store, rules, registry, zonesInside: alerts.zonesInside, fuelOf: fuel.of });
   const trips = createTripService({
     rules,
     zones: geofences.list,
@@ -73,6 +76,7 @@ export function createServer({
     io.emit('driver:event', { event });
     if (trip) emitTrip(trip);
   };
+  const emitFuel = ({ event }) => io.emit('fuel:event', { event });
   const driverInfo = (truck_id) => {
     const { driver_id, driver_name } = registry.truckInfo(truck_id);
     return { driver_id, driver_name };
@@ -110,6 +114,12 @@ export function createServer({
         } catch (err) {
           log.error(`[bff] driver event detection failed for ${p.truck_id}:`, err.message);
         }
+        try {
+          const changes = fuel.ingest(p, info, nowMs);
+          if (broadcast) for (const change of changes) emitFuel(change);
+        } catch (err) {
+          log.error(`[bff] fuel tracking failed for ${p.truck_id}:`, err.message);
+        }
       }
     };
     if (backfill) {
@@ -129,6 +139,13 @@ export function createServer({
     } catch (err) {
       log.error('[bff] dropped a batch of points:', err.message);
       return;
+    }
+    // Timeline engines first, so the fuel level sent with truck:update includes this batch. A
+    // failure here must not hold back alerts or positions.
+    try {
+      feedTrips(accepted, true);
+    } catch (err) {
+      log.error('[bff] timeline engines failed for a batch:', err.message);
     }
     // One truck failing must not stop the others in the same batch.
     for (const payload of payloads) {
@@ -151,9 +168,14 @@ export function createServer({
       } catch (err) {
         log.error(`[bff] zone lookup failed for ${payload.truck_id}:`, err.message);
       }
-      io.emit('truck:update', { ...payload, zones_inside, server_time: nowMs });
+      let fuelNow = payload.fuel;
+      try {
+        fuelNow = fuel.of(payload.truck_id);
+      } catch (err) {
+        log.error(`[bff] fuel lookup failed for ${payload.truck_id}:`, err.message);
+      }
+      io.emit('truck:update', { ...payload, zones_inside, fuel: fuelNow, server_time: nowMs });
     }
-    feedTrips(accepted, true);
   });
 
   // Geofence breach demo: the nearest restricted zone that covers the truck, preferring
@@ -178,6 +200,7 @@ export function createServer({
       for (const change of alerts.sweep(lastReceived)) emitAlertChange(change);
       for (const change of trips.sweep()) emitTrip(change);
       for (const change of driving.sweep(Date.now(), driverInfo)) emitDriving(change);
+      for (const change of fuel.sweep(Date.now(), driverInfo)) emitFuel(change);
       io.emit('pipeline:status', pipeline());
     } catch (err) {
       log.error('[bff] periodic sweep failed:', err.message);
@@ -193,7 +216,25 @@ export function createServer({
   app.use('/api', demoRouter({ scenarios }));
   app.use('/api', tripsRouter({ trips }));
   app.use('/api', drivingRouter({ driving }));
-  app.use('/api', registryRouter({ registry, onChange: () => io.emit('registry:update') }));
+  app.use('/api', fuelRouter({ fuel, rules }));
+  app.use(
+    '/api',
+    registryRouter({
+      registry,
+      onChange: () => io.emit('registry:update'),
+      // A manager refuel raises the fuel estimate; the new level goes out at once.
+      onRefuel: (refuel) => {
+        try {
+          const applied = fuel.refuel(refuel.truck_id, refuel.litres, refuel.at);
+          if (applied) io.emit('fuel:level', { truck_id: refuel.truck_id, fuel: fuel.of(refuel.truck_id) });
+          return applied;
+        } catch (err) {
+          log.error('[bff] refuel saved but not applied to the estimate:', err.message);
+          return false;
+        }
+      },
+    }),
+  );
   app.use(
     '/api',
     settingsRouter({
@@ -233,6 +274,7 @@ export function createServer({
     ruleSettings,
     trips,
     driving,
+    fuel,
     rules,
     runSweep,
     listen(port) {

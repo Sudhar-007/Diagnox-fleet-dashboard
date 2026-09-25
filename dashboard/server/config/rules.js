@@ -48,6 +48,21 @@ export const rules = {
     assignment_early_s: 1800,
   },
 
+  fuel: {
+    // Estimated burn while the engine runs (rpm > 0), from the spec:
+    // L/h = base_lph + load_factor x engine_load x (rpm / rpm_ref).
+    base_lph: 2,
+    load_factor: 0.25,
+    rpm_ref: 2000,
+    // On fuel_level readings: a drop of more than theft_drop_pct within anomaly_window_s while
+    // speed stays 0 is a possible theft; a rise of more than refuel_rise_pct is a refuel.
+    theft_drop_pct: 5,
+    refuel_rise_pct: 5,
+    anomaly_window_s: 60,
+    // One level sample per truck this often (telemetry time) for the trend chart.
+    sample_every_s: 30,
+  },
+
   driver: {
     // Events come from consecutive readings no more than max_gap_s apart; a wider gap is no
     // evidence either way. Rates are speed change per second (km/h/s).
