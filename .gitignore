@@ -1,0 +1,21 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# build output / deps
+.pio/
+build/
+dist/
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# logs / os junk
+*.log
+.DS_Store
+Thumbs.db
