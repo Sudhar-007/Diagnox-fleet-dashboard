@@ -54,6 +54,10 @@ export function createStore({ capacity = 5000, maxFutureS = Infinity } = {}) {
       const r = trucks.get(truck_id);
       return r && r.points.length ? strip(r.points[r.points.length - 1]) : null;
     },
+    oldest(truck_id) {
+      const r = trucks.get(truck_id);
+      return r && r.points.length ? strip(r.points[0]) : null;
+    },
     meta(truck_id) {
       const r = trucks.get(truck_id);
       return r ? { received_at: r.received_at, provenance: r.provenance, points: r.points.length } : null;

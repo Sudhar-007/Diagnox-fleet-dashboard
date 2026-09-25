@@ -7,7 +7,7 @@ import { parseTs } from '../engine/time.js';
 export function createFuelService({ rules, capacityOf, maxEvents = 500, maxSamples = 480 }) {
   const states = new Map(); // truck_id -> engine state
   const judgedAt = new Map(); // truck_id -> receive ms of the last point the engine accepted
-  const samples = new Map(); // truck_id -> [[t_ms, level_pct, source]] oldest first
+  const samples = new Map(); // truck_id -> [[t_ms, level_pct, source, used_l]] oldest first
   const openIds = new Map(); // `${truck_id}|${type}|${start_ms}` -> id of an open anomaly
   const events = []; // oldest first
   const byId = new Map();
@@ -48,7 +48,7 @@ export function createFuelService({ rules, capacityOf, maxEvents = 500, maxSampl
     if (last && state.last_ms < last[0]) list.length = 0;
     else if (last && state.last_ms - last[0] < rules.fuel.sample_every_s * 1000) return;
     const s = fuelSummary(state, capacityOf(truck_id));
-    list.push([state.last_ms, s.level_pct, s.source]);
+    list.push([state.last_ms, s.level_pct, s.source, s.used_l]);
     while (list.length > maxSamples) list.shift();
     samples.set(truck_id, list);
   }

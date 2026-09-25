@@ -11,6 +11,7 @@ import { createRuleSettings } from './services/ruleSettings.js';
 import { createTripService } from './services/trips.js';
 import { createDrivingService } from './services/driving.js';
 import { createFuelService } from './services/fuel.js';
+import { createAnalytics } from './services/analytics.js';
 import { createMemoryStorage } from './services/storage.js';
 import { createAlertService } from './services/alerts.js';
 import { createScenarioService } from './services/scenarios.js';
@@ -27,12 +28,13 @@ import { settingsRouter } from './routes/settings.js';
 import { tripsRouter } from './routes/trips.js';
 import { drivingRouter } from './routes/driving.js';
 import { fuelRouter } from './routes/fuel.js';
+import { analyticsRouter } from './routes/analytics.js';
 
 // Wires store, engines, REST and Socket.IO around a telemetry source.
 // `makeSource(onPoints)` must return { start, stop, mode, requestedMode } and, when it runs
 // the simulator, `sim` (used by demo scenarios). `onPoints(points, provenance, { backfill })`:
-// backfilled points (warm start history) are stored and fed to trip and driver event detection only; they
-// raise no alerts and are not broadcast.
+// backfilled points (warm start history) are stored and fed to the timeline engines only (trips,
+// driver events, risk sampling, fuel); they raise no alerts and are not broadcast.
 export function createServer({
   rules: baseRules,
   allowedOrigins,
@@ -65,6 +67,7 @@ export function createServer({
         .map((a) => ({ id: a.id, kind: a.kind, name: a.name, level: a.level, opened_at: a.opened_at }))
         .reverse(),
   });
+  const analytics = createAnalytics({ store, rules, alerts, trips, fuel, registry });
   const driving = createDrivingService({ rules, onRecord: (event) => trips.recordEvent(event) });
   // Trip changes may carry driver events a starting trip claimed; a driver event goes out
   // with the trip whose score it changed.
@@ -113,6 +116,11 @@ export function createServer({
           if (broadcast) for (const change of changes) emitDriving(change);
         } catch (err) {
           log.error(`[bff] driver event detection failed for ${p.truck_id}:`, err.message);
+        }
+        try {
+          analytics.observe(p);
+        } catch (err) {
+          log.error(`[bff] risk sample failed for ${p.truck_id}:`, err.message);
         }
         try {
           const changes = fuel.ingest(p, info, nowMs);
@@ -217,6 +225,7 @@ export function createServer({
   app.use('/api', tripsRouter({ trips }));
   app.use('/api', drivingRouter({ driving }));
   app.use('/api', fuelRouter({ fuel, rules }));
+  app.use('/api', analyticsRouter({ analytics }));
   app.use(
     '/api',
     registryRouter({
@@ -275,6 +284,7 @@ export function createServer({
     trips,
     driving,
     fuel,
+    analytics,
     rules,
     runSweep,
     listen(port) {
