@@ -34,6 +34,8 @@ is created; set it to the Vercel URLs, e.g.
 `https://<project>.vercel.app,https://<project>-*-<vercel-team>.vercel.app,http://localhost:5173`.
 Keeping the team slug in the preview pattern stops other Vercel accounts' projects from matching.
 The server logs the allowed origins at startup; check them in the Render logs after the first deploy.
+Set `TELEMETRY_API_KEY` in the Render dashboard (Environment) to accept device data; without it
+`POST /api/telemetry` answers 503.
 Run exactly one instance: all state is in memory.
 
 Frontend (Vercel): import the repo, set Root Directory to `dashboard/client` (framework Vite is detected),
@@ -54,6 +56,7 @@ cd client && npm run build
 ## Endpoints so far
 
 - `GET /api/health`: data source, uptime, truck count
+- `POST /api/telemetry`: the truck device pushes one point or an array (header `x-api-key`, see `docs/interface.md`)
 - `GET /api/trucks`: latest point per truck plus derived `status`, `health`, `findings`, `freshness`, `provenance`
 - `GET /api/trucks/:truck_id/history?from&to`: raw points (`from`/`to` as contract timestamps or epoch ms)
 - Socket.IO `truck:update`: contract payload with the same derived fields

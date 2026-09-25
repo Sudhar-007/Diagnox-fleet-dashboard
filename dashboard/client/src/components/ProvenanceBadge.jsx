@@ -1,7 +1,7 @@
 const KINDS = {
   LIVE_HW: {
     label: 'LIVE HW',
-    title: 'From the truck hardware via FastAPI',
+    title: 'From the truck hardware',
     className: 'border-hw bg-hw/15 text-hw',
   },
   SIM: {

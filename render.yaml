@@ -13,13 +13,15 @@ services:
       paths:
         - dashboard/server/**
     envVars:
+      # Simulator plus the truck device pushing to POST /api/telemetry.
       - key: DATA_SOURCE
-        value: mock
+        value: hybrid
       - key: TZ
         value: Asia/Kolkata
       - key: DEMO_ENABLED
         value: "true"
       - key: CORS_ORIGINS
         sync: false
-      - key: FASTAPI_URL
+      # Secret the device sends in x-api-key; set it in the Render dashboard, never in git.
+      - key: TELEMETRY_API_KEY
         sync: false

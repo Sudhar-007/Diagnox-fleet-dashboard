@@ -13,6 +13,8 @@ if (!process.env.TZ) {
 
 const PORT = Number(process.env.PORT) || 4000;
 const DATA_SOURCE = process.env.DATA_SOURCE || 'mock';
+// Shared secret the truck device sends in x-api-key to POST /api/telemetry.
+const TELEMETRY_API_KEY = process.env.TELEMETRY_API_KEY?.trim() || null;
 const allowedOrigins = parseOrigins(process.env.CORS_ORIGINS || 'http://localhost:5173');
 // Demo scenario panel. Set DEMO_ENABLED=false to stop anyone triggering scenarios.
 const DEMO_ENABLED = (process.env.DEMO_ENABLED ?? 'true') !== 'false';
@@ -32,11 +34,15 @@ const bff = createServer({
   allowedOrigins,
   demoEnabled: DEMO_ENABLED,
   storage,
+  telemetryKey: TELEMETRY_API_KEY,
   makeSource: (onPoints) => createSource({ mode: DATA_SOURCE, onPoints, warmStartS: WARM_START_S }),
 });
 
 const port = await bff.listen(PORT);
 console.log(`[bff] listening on :${port}, data source ${bff.source.mode()}`);
+if (bff.source.acceptsDevice() && !TELEMETRY_API_KEY) {
+  console.warn('[bff] TELEMETRY_API_KEY is not set; POST /api/telemetry is refused');
+}
 console.log(`[bff] CORS origins: ${allowedOrigins.map(String).join(', ')}`);
 console.log(`[bff] manager data stored as ${storage.kind} in ${process.env.DATA_DIR || 'data'}`);
 

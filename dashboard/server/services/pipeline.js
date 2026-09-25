@@ -3,9 +3,9 @@ import { parseTs } from '../engine/time.js';
 // Health of each hop the data passes through before reaching the browser.
 // status: 'ok' | 'degraded' | 'down'. The browser adds its own "UI" hop (socket state).
 //
-// mock:    Simulator -> BFF
-// fastapi: Device -> FastAPI -> BFF   (device/FastAPI hops are filled in when the real
-// hybrid:  Device -> FastAPI -> BFF    source is wired; until then the source runs mock)
+// mock:   Simulator -> BFF
+// device: Device (POST /api/telemetry) -> BFF
+// hybrid: both
 export function computePipeline({ mode, trucks, nowMs, startedAt }) {
   const hops = [];
   const reporting = (list) => list.filter((t) => t.freshness === 'live').length;
@@ -14,7 +14,7 @@ export function computePipeline({ mode, trucks, nowMs, startedAt }) {
   const sim = trucks.filter((t) => t.provenance === 'SIM');
   const hw = trucks.filter((t) => t.provenance === 'LIVE_HW');
 
-  if (mode === 'fastapi' || mode === 'hybrid') {
+  if (mode === 'device' || mode === 'hybrid') {
     const live = reporting(hw);
     hops.push({ id: 'device', label: 'Device', status: statusFor(live, hw.length), detail: `${live} of ${hw.length} hardware trucks reporting` });
   }

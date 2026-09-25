@@ -7,7 +7,7 @@ services:
     environment:
       PORT: 4000
       DATA_SOURCE: ${DATA_SOURCE:-mock}
-      FASTAPI_URL: ${FASTAPI_URL:-}
+      TELEMETRY_API_KEY: ${TELEMETRY_API_KEY:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       TZ: Asia/Kolkata
     restart: unless-stopped

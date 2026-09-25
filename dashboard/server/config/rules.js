@@ -97,6 +97,9 @@ export const rules = {
   ingest: {
     // Points stamped this far ahead of the BFF clock are dropped (device clock not set yet).
     max_future_s: 300,
+    // Device pushes stamped more than this long ago are rejected (unset clock, e.g. 1970 or
+    // 2000); a 4G backlog younger than this is still accepted.
+    max_past_s: 86400,
   },
 
   health: [

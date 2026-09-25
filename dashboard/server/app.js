@@ -30,6 +30,8 @@ import { tripsRouter } from './routes/trips.js';
 import { drivingRouter } from './routes/driving.js';
 import { fuelRouter } from './routes/fuel.js';
 import { analyticsRouter } from './routes/analytics.js';
+import { telemetryRouter } from './routes/telemetry.js';
+import { PROVENANCE } from './services/source.js';
 
 // Wires store, engines, REST and Socket.IO around a telemetry source.
 // `makeSource(onPoints)` must return { start, stop, mode, requestedMode } and, when it runs
@@ -46,6 +48,8 @@ export function createServer({
   storage = createMemoryStorage(),
   demoEnabled = true,
   forest = maintenanceForest,
+  // Key the truck device must send in x-api-key to POST /api/telemetry; no key, no device data.
+  telemetryKey = null,
   log = console,
 }) {
   // Thresholds are edited at runtime (Settings), so each server works on its own copy.
@@ -101,7 +105,8 @@ export function createServer({
     io.emit(kind === 'new' ? 'alert:new' : 'alert:update', { alert, event });
   };
 
-  const source = makeSource((points, provenance, { backfill = false } = {}) => {
+  // Returns how many points the store kept.
+  const handlePoints = (points, provenance, { backfill = false } = {}) => {
     const nowMs = Date.now();
     // Trip and driver event detection judge every stored point, in time order (not only the
     // newest per truck). Events are judged after the trip, so a trip that starts on this point
@@ -140,10 +145,11 @@ export function createServer({
         const accepted = [];
         fleet.backfill(points, provenance, nowMs, (p) => accepted.push(p));
         feedTrips(accepted, false);
+        return accepted.length;
       } catch (err) {
         log.error('[bff] dropped a batch of history points:', err.message);
+        return 0;
       }
-      return;
     }
     let payloads;
     const accepted = [];
@@ -151,7 +157,7 @@ export function createServer({
       payloads = fleet.ingest(points, provenance, nowMs, (p) => accepted.push(p));
     } catch (err) {
       log.error('[bff] dropped a batch of points:', err.message);
-      return;
+      return 0;
     }
     // Timeline engines first, so the fuel level sent with truck:update includes this batch. A
     // failure here must not hold back alerts or positions.
@@ -189,7 +195,34 @@ export function createServer({
       }
       io.emit('truck:update', { ...payload, zones_inside, fuel: fuelNow, server_time: nowMs });
     }
-  });
+    return accepted.length;
+  };
+  const source = makeSource(handlePoints);
+
+  // Ids the simulator drives. A device may not push these: mixing simulated and real readings
+  // on one truck would fake collisions, harsh braking and trip jumps.
+  const simIds = new Set(source.sim?.truckIds?.() ?? []);
+
+  // Device pushes go in one point at a time, oldest first, so every point of a backlog sent
+  // after a 4G outage is judged for alerts, SOS and collisions, not only the newest.
+  // A backlog yields to the event loop every YIELD_EVERY points so the simulator and other
+  // requests keep running; requests are queued so two pushes never interleave.
+  const YIELD_EVERY = 25;
+  let deviceQueue = Promise.resolve();
+  const ingestDevice = (points) => {
+    const run = async () => {
+      const sorted = [...points].sort((a, b) => parseTs(a.timestamp) - parseTs(b.timestamp));
+      let kept = 0;
+      for (let i = 0; i < sorted.length; i++) {
+        if (i > 0 && i % YIELD_EVERY === 0) await new Promise((resolve) => setImmediate(resolve));
+        kept += handlePoints([sorted[i]], PROVENANCE.LIVE_HW);
+      }
+      return kept;
+    };
+    const result = deviceQueue.then(run);
+    deviceQueue = result.catch(() => {});
+    return result;
+  };
 
   // Geofence breach demo: the nearest restricted zone that covers the truck, preferring
   // zones that raise alerts.
@@ -222,6 +255,16 @@ export function createServer({
 
   app.disable('x-powered-by');
   app.use(cors({ origin: checkOrigin }));
+  app.use(
+    '/api',
+    telemetryRouter({
+      apiKey: telemetryKey,
+      enabled: () => Boolean(source.acceptsDevice?.()),
+      reserved: (id) => simIds.has(id),
+      maxPastS: rules.ingest.max_past_s,
+      ingest: ingestDevice,
+    }),
+  );
   app.use(express.json({ limit: '100kb' }));
   app.use('/api', healthRouter({ source, fleet, startedAt, pipeline }));
   app.use('/api', trucksRouter({ fleet, store, rules }));

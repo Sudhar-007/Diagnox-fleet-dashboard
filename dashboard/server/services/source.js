@@ -3,25 +3,30 @@ import { routes } from '../sim/routes.js';
 
 export const PROVENANCE = { SIM: 'SIM', LIVE_HW: 'LIVE_HW' };
 
+export const MODES = ['mock', 'hybrid', 'device'];
+
 // The only module that knows where telemetry comes from.
-// mock: built-in simulator. fastapi / hybrid: wired in a later step; until then they fall back to mock.
+// mock:   built-in simulator only; device pushes are refused.
+// hybrid: simulator plus trucks pushing to POST /api/telemetry.
+// device: only trucks pushing to POST /api/telemetry.
 // warmStartS: on start, the simulator first replays this many seconds of past driving as
 // history (1 point per truck per second, sent with { backfill: true }), so trips and charts
 // have data right after a restart. Simulated data only.
 export function createSource({ mode = 'mock', onPoints, warmStartS = 0, log = console }) {
-  const sim = createSimulator({ routes });
   let effectiveMode = mode;
-
-  if (mode !== 'mock') {
-    log.warn(`[source] DATA_SOURCE=${mode} is not wired yet, running mock`);
+  if (!MODES.includes(mode)) {
+    log.warn(`[source] unknown DATA_SOURCE=${mode}, running mock`);
     effectiveMode = 'mock';
   }
+  const sim = effectiveMode === 'device' ? null : createSimulator({ routes });
 
   return {
     mode: () => effectiveMode,
     requestedMode: () => mode,
+    acceptsDevice: () => effectiveMode !== 'mock',
     sim,
     start() {
+      if (!sim) return;
       if (warmStartS > 0) {
         const nowMs = Date.now();
         for (let s = warmStartS; s >= 1; s--) onPoints(sim.step(nowMs - s * 1000), PROVENANCE.SIM, { backfill: true });
@@ -30,7 +35,7 @@ export function createSource({ mode = 'mock', onPoints, warmStartS = 0, log = co
       sim.start((points) => onPoints(points, PROVENANCE.SIM));
     },
     stop() {
-      sim.stop();
+      sim?.stop();
     },
   };
 }
