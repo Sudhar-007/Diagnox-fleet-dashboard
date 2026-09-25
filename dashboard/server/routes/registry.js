@@ -21,6 +21,8 @@ export function registryRouter({ registry, onChange }) {
   r.delete('/registry/trucks/:truck_id', handle((req) => registry.removeTruck(req.params.truck_id)));
 
   r.post('/registry/drivers', handle((req) => ({ driver: registry.addDriver(req.body ?? {}) }), 201));
+  r.put('/registry/drivers/:driver_id', handle((req) => ({ driver: registry.updateDriver(req.params.driver_id, req.body ?? {}) })));
+  r.delete('/registry/drivers/:driver_id', handle((req) => registry.removeDriver(req.params.driver_id)));
 
   r.get('/service-records', handle((req) => ({ records: registry.listServiceRecords({ truck_id: req.query.truck_id }) })));
   r.post('/service-records', handle((req) => ({ record: registry.addServiceRecord(req.body ?? {}) }), 201));

@@ -121,6 +121,36 @@ export function createRegistry({ storage, log = console }) {
   }
 
   const withDriver = (t) => ({ ...t, driver_name: findDriver(t.driver_id)?.name ?? null });
+  const withTruck = (d) => ({ ...d, truck_id: trucks.find((t) => t.driver_id === d.driver_id)?.truck_id ?? null });
+
+  function driverFields(body) {
+    return {
+      name: text(body.name, 'name', 60, { required: true }),
+      phone: text(body.phone, 'phone', 20),
+      licence_no: text(body.licence_no, 'licence_no', 30),
+    };
+  }
+
+  // undefined = leave as is, null = no truck, else a registry truck_id.
+  function truckTarget(value) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    const id = typeof value === 'string' ? value.trim() : '';
+    if (!findTruck(id)) bad(`unknown truck ${id}`.trim());
+    return id;
+  }
+
+  // Puts the driver on truck_id (or on no truck): off any other truck, and the truck's
+  // previous driver is unassigned.
+  function seatDriver(driver_id, truck_id) {
+    commit.trucks(
+      trucks.map((t) => {
+        if (t.truck_id === truck_id) return { ...t, driver_id };
+        if (t.driver_id === driver_id) return { ...t, driver_id: null };
+        return t;
+      }),
+    );
+  }
 
   return {
     storage: { kind: storage.kind, persistent: Boolean(storage.persistent) },
@@ -141,8 +171,7 @@ export function createRegistry({ storage, log = console }) {
     },
 
     listTrucks: () => trucks.map(withDriver),
-    listDrivers: () =>
-      drivers.map((d) => ({ ...d, truck_id: trucks.find((t) => t.driver_id === d.driver_id)?.truck_id ?? null })),
+    listDrivers: () => drivers.map(withTruck),
 
     addTruck(body = {}) {
       const truck_id = typeof body.truck_id === 'string' ? body.truck_id.trim() : '';
@@ -168,15 +197,32 @@ export function createRegistry({ storage, log = console }) {
       commit.trucks(trucks.filter((t) => t.truck_id !== truck_id));
     },
 
+    // truck_id (optional) puts the driver on that truck, replacing its current driver.
     addDriver(body = {}) {
-      const fields = {
-        name: text(body.name, 'name', 60, { required: true }),
-        phone: text(body.phone, 'phone', 20),
-        licence_no: text(body.licence_no, 'licence_no', 30),
-      };
+      const fields = driverFields(body);
+      const target = truckTarget(body.truck_id);
       const driver = { driver_id: newId('D'), ...fields, source: 'manager', created_at: nowTs() };
       commit.drivers([...drivers, driver]);
-      return driver;
+      if (target !== undefined) seatDriver(driver.driver_id, target);
+      return withTruck(driver);
+    },
+
+    // Fields left out keep their value; truck_id "" or null takes the driver off their truck.
+    updateDriver(driver_id, body = {}) {
+      const existing = findDriver(driver_id);
+      if (!existing) throw new RegistryError(404, `unknown driver ${driver_id}`);
+      const merged = { ...existing, ...driverFields({ ...existing, ...body }) };
+      const target = truckTarget(body.truck_id);
+      commit.drivers(drivers.map((d) => (d.driver_id === driver_id ? merged : d)));
+      if (target !== undefined) seatDriver(driver_id, target);
+      return withTruck(merged);
+    },
+
+    // The driver's truck is left without a driver; past trips and events keep the name.
+    removeDriver(driver_id) {
+      if (!findDriver(driver_id)) throw new RegistryError(404, `unknown driver ${driver_id}`);
+      if (trucks.some((t) => t.driver_id === driver_id)) seatDriver(driver_id, null);
+      commit.drivers(drivers.filter((d) => d.driver_id !== driver_id));
     },
 
     // Newest work first; same day ordered by when it was entered.

@@ -61,6 +61,26 @@ export const SCENARIOS = {
     },
   },
 
+  harsh_braking: {
+    label: 'Harsh braking',
+    default_truck: 'TN04',
+    duration_s: 30,
+    description: 'The truck settles at 50 km/h, then brakes hard twice (about 15 km/h per second), never below 20 km/h.',
+    // Changes of 4 km/h per second stay under the harsh acceleration limit, and the truck
+    // never drops near a stop, so the braking is not read as a collision.
+    speedAt(t, speed) {
+      const toward = (target) => (speed < target ? Math.min(target, speed + 4) : Math.max(target, speed - 4));
+      if (t < 14) return toward(50);
+      // Steps of 14 to 16 km/h stay harsh even if a reading arrives a little late.
+      if (t < 15) return 34;
+      if (t < 16) return 20;
+      if (t < 25) return toward(50);
+      if (t < 26) return Math.max(20, speed - 16);
+      if (t < 27) return Math.max(20, speed - 16);
+      return undefined;
+    },
+  },
+
   // Needs a target: the scenario service passes the nearest restricted zone to build().
   geofence_breach: {
     label: 'Geofence breach',

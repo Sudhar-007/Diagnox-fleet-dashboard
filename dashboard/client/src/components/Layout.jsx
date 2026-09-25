@@ -11,6 +11,7 @@ const NAV = [
   { to: '/alerts', label: 'Alerts & SOS', badge: 'alerts' },
   { to: '/vehicles', label: 'Vehicles' },
   { to: '/trips', label: 'Trips' },
+  { to: '/drivers', label: 'Drivers' },
   { to: '/maintenance', label: 'Maintenance' },
   { to: '/settings', label: 'Settings' },
 ];

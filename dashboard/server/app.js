@@ -9,6 +9,7 @@ import { createRegistry } from './services/registry.js';
 import { createGeofences } from './services/geofences.js';
 import { createRuleSettings } from './services/ruleSettings.js';
 import { createTripService } from './services/trips.js';
+import { createDrivingService } from './services/driving.js';
 import { createMemoryStorage } from './services/storage.js';
 import { createAlertService } from './services/alerts.js';
 import { createScenarioService } from './services/scenarios.js';
@@ -23,11 +24,12 @@ import { demoRouter } from './routes/demo.js';
 import { registryRouter } from './routes/registry.js';
 import { settingsRouter } from './routes/settings.js';
 import { tripsRouter } from './routes/trips.js';
+import { drivingRouter } from './routes/driving.js';
 
 // Wires store, engines, REST and Socket.IO around a telemetry source.
 // `makeSource(onPoints)` must return { start, stop, mode, requestedMode } and, when it runs
 // the simulator, `sim` (used by demo scenarios). `onPoints(points, provenance, { backfill })`:
-// backfilled points (warm start history) are stored and fed to trip detection only; they
+// backfilled points (warm start history) are stored and fed to trip and driver event detection only; they
 // raise no alerts and are not broadcast.
 export function createServer({
   rules: baseRules,
@@ -60,7 +62,21 @@ export function createServer({
         .map((a) => ({ id: a.id, kind: a.kind, name: a.name, level: a.level, opened_at: a.opened_at }))
         .reverse(),
   });
-  const emitTrip = ({ trip }) => io.emit('trip:update', { trip });
+  const driving = createDrivingService({ rules, onRecord: (event) => trips.recordEvent(event) });
+  // Trip changes may carry driver events a starting trip claimed; a driver event goes out
+  // with the trip whose score it changed.
+  const emitTrip = ({ trip, event }) => {
+    if (trip) io.emit('trip:update', { trip });
+    if (event) io.emit('driver:event', { event });
+  };
+  const emitDriving = ({ event, trip }) => {
+    io.emit('driver:event', { event });
+    if (trip) emitTrip(trip);
+  };
+  const driverInfo = (truck_id) => {
+    const { driver_id, driver_name } = registry.truckInfo(truck_id);
+    return { driver_id, driver_name };
+  };
 
   const app = express();
   const server = http.createServer(app);
@@ -75,15 +91,24 @@ export function createServer({
 
   const source = makeSource((points, provenance, { backfill = false } = {}) => {
     const nowMs = Date.now();
-    // Trip detection judges every stored point, in time order (not only the newest per truck).
+    // Trip and driver event detection judge every stored point, in time order (not only the
+    // newest per truck). Events are judged after the trip, so a trip that starts on this point
+    // exists when its score changes.
     const feedTrips = (accepted, broadcast) => {
       accepted.sort((a, b) => parseTs(a.timestamp) - parseTs(b.timestamp));
       for (const p of accepted) {
+        const info = { ...driverInfo(p.truck_id), provenance };
         try {
-          const changes = trips.ingest(p, { driver_name: registry.truckInfo(p.truck_id).driver_name, provenance }, nowMs);
+          const changes = trips.ingest(p, info, nowMs);
           if (broadcast) for (const change of changes) emitTrip(change);
         } catch (err) {
           log.error(`[bff] trip detection failed for ${p.truck_id}:`, err.message);
+        }
+        try {
+          const changes = driving.ingest(p, info, nowMs);
+          if (broadcast) for (const change of changes) emitDriving(change);
+        } catch (err) {
+          log.error(`[bff] driver event detection failed for ${p.truck_id}:`, err.message);
         }
       }
     };
@@ -152,6 +177,7 @@ export function createServer({
       const lastReceived = (id) => store.meta(id)?.received_at ?? null;
       for (const change of alerts.sweep(lastReceived)) emitAlertChange(change);
       for (const change of trips.sweep()) emitTrip(change);
+      for (const change of driving.sweep(Date.now(), driverInfo)) emitDriving(change);
       io.emit('pipeline:status', pipeline());
     } catch (err) {
       log.error('[bff] periodic sweep failed:', err.message);
@@ -166,6 +192,7 @@ export function createServer({
   app.use('/api', alertsRouter({ alerts, fleet, onChange: emitAlertChange }));
   app.use('/api', demoRouter({ scenarios }));
   app.use('/api', tripsRouter({ trips }));
+  app.use('/api', drivingRouter({ driving }));
   app.use('/api', registryRouter({ registry, onChange: () => io.emit('registry:update') }));
   app.use(
     '/api',
@@ -205,6 +232,7 @@ export function createServer({
     geofences,
     ruleSettings,
     trips,
+    driving,
     rules,
     runSweep,
     listen(port) {

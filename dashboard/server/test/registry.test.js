@@ -206,3 +206,22 @@ test('risk: a short cranking dip right after start does not look like all-the-ti
   assert.ok(batt.exposure <= 5 / rules.risk.min_judged_s + 0.001);
   assert.ok(r.score < 5);
 });
+
+test('drivers: add onto a truck, move, edit, remove', () => {
+  const reg = createRegistry({ storage: createMemoryStorage(), log: { error() {}, warn() {} } });
+  const before = reg.listTrucks().find((t) => t.truck_id === 'TN01').driver_id;
+  const d = reg.addDriver({ name: 'Kavya', truck_id: 'TN01' });
+  assert.equal(d.truck_id, 'TN01');
+  assert.equal(reg.truckInfo('TN01').driver_name, 'Kavya');
+  assert.equal(reg.listDrivers().find((x) => x.driver_id === before).truck_id, null, 'previous driver is off the truck');
+  const moved = reg.updateDriver(d.driver_id, { truck_id: 'TN02', phone: '99999 00000' });
+  assert.equal(moved.truck_id, 'TN02');
+  assert.equal(moved.name, 'Kavya', 'fields left out keep their value');
+  assert.equal(reg.listTrucks().find((t) => t.truck_id === 'TN01').driver_id, null);
+  assert.throws(() => reg.updateDriver(d.driver_id, { truck_id: 'NOPE' }), /unknown truck NOPE/);
+  assert.equal(reg.updateDriver(d.driver_id, { truck_id: '' }).truck_id, null);
+  reg.updateDriver(d.driver_id, { truck_id: 'TN03' });
+  reg.removeDriver(d.driver_id);
+  assert.equal(reg.listTrucks().find((t) => t.truck_id === 'TN03').driver_id, null);
+  assert.throws(() => reg.removeDriver(d.driver_id), /unknown driver/);
+});

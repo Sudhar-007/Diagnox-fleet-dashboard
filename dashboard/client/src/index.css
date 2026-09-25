@@ -192,3 +192,9 @@
 .truck-pin--replay .truck-pin__dot {
   background: var(--color-ink);
 }
+
+/* Screen-reader-only labels are absolutely positioned; keep them inside the scroll box of
+   wide tables so they cannot widen the page on phones. */
+.overflow-x-auto {
+  position: relative;
+}

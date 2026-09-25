@@ -48,6 +48,21 @@ export const rules = {
     assignment_early_s: 1800,
   },
 
+  driver: {
+    // Events come from consecutive readings no more than max_gap_s apart; a wider gap is no
+    // evidence either way. Rates are speed change per second (km/h/s).
+    max_gap_s: 3,
+    harsh_accel_kmh_s: 8,
+    harsh_brake_kmh_s: 10,
+    overspeed_kmh: 80,
+    // Idling: speed 0 with the engine running (rpm > 0) for longer than this (demo value).
+    idle_min_s: 60,
+    // Each trip starts at start_score and loses these points, never below 0. Per-minute costs
+    // count full minutes, at least one.
+    start_score: 100,
+    points: { harsh_brake: 5, harsh_accel: 3, overspeed_per_min: 2, idle_per_min: 1 },
+  },
+
   // Bounds for thresholds edited in Settings. Input sanity limits only, not engineering limits.
   threshold_limits: {
     coolant_temp: [40, 150],

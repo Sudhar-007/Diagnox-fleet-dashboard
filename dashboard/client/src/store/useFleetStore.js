@@ -27,12 +27,37 @@ let resyncLive = null;
 let tripLive = null;
 export function beginTripResync() {
   tripLive = new Map();
+  drivingLive = new Map();
 }
 
-// A completed copy always wins; otherwise the copy with the later reading.
+// Driver events seen since the current resync began, replayed over the REST list.
+let drivingLive = null;
+const DRIVING_LIMIT = 500;
+
+// An ended copy wins over a running one; otherwise the copy that runs longer.
+function newerEvent(existing, incoming) {
+  if (!existing) return true;
+  if (!existing.ongoing) return false;
+  return !incoming.ongoing || incoming.end_ms >= existing.end_ms;
+}
+
+// Newest first by start, capped.
+const eventList = (byId) =>
+  Object.values(byId)
+    .sort((a, b) => b.start_ms - a.start_ms)
+    .slice(0, DRIVING_LIMIT);
+
+// Grows with every event a trip gains and every second an ongoing one runs on.
+const drivingProgress = (t) =>
+  (t.driving?.deductions ?? []).reduce((sum, d) => sum + d.count * 1e6 + (d.seconds ?? 0), 0);
+
+// A completed copy always wins over a running one; otherwise the copy with the later reading.
+// A completed trip still changes when a driver event in it ends later (idling after the stop);
+// the trip keeps its events, so they only grow: between completed copies the one further along
+// wins.
 function newerTrip(existing, incoming) {
   if (!existing) return true;
-  if (existing.status === 'completed') return false;
+  if (existing.status === 'completed') return incoming.status === 'completed' && drivingProgress(incoming) > drivingProgress(existing);
   return incoming.status === 'completed' || incoming.last_at >= existing.last_at;
 }
 
@@ -97,6 +122,7 @@ export const useFleetStore = create((set) => ({
   freshnessRules: null,
   healthRules: null,
   tripRules: null,
+  driverRules: null,
   clockOffsetMs: 0,
   connection: 'connecting',
   pipeline: null,
@@ -109,12 +135,14 @@ export const useFleetStore = create((set) => ({
   zoneVisits: [],
   // Detected trips by id (summaries, no path); null until the first load.
   trips: null,
+  // Driver behaviour events, newest first; null until the first load.
+  driverEvents: null,
   syncError: null,
   now: Date.now(),
 
   // `requestedAt` is the client time the snapshot request was sent; the server
   // time is assumed to be halfway through the round trip.
-  applySnapshot({ server_time, freshness, health_rules, trip_rules, trucks }, requestedAt = Date.now()) {
+  applySnapshot({ server_time, freshness, health_rules, trip_rules, driver_rules, trucks }, requestedAt = Date.now()) {
     const now = Date.now();
     const snapshot = Object.fromEntries(trucks.map((t) => [t.truck_id, t]));
     // Socket updates that arrived while the request was in flight may be newer than the snapshot.
@@ -130,6 +158,7 @@ export const useFleetStore = create((set) => ({
       trails: {},
       freshnessRules: freshness,
       tripRules: trip_rules ?? null,
+      driverRules: driver_rules ?? null,
       ...(requestedAt >= rulesAppliedAt ? { healthRules: health_rules } : {}),
       clockOffsetMs: server_time - (requestedAt + now) / 2,
       syncError: null,
@@ -181,6 +210,25 @@ export const useFleetStore = create((set) => ({
   applyTripUpdate: ({ trip }) => {
     if (tripLive && newerTrip(tripLive.get(trip.id), trip)) tripLive.set(trip.id, trip);
     set((s) => (s.trips && newerTrip(s.trips[trip.id], trip) ? { trips: { ...s.trips, [trip.id]: trip } } : {}));
+  },
+  // Full list after a (re)connect; event ids restart with the server.
+  applyDriverEvents: (list) => {
+    const byId = Object.fromEntries(list.map((e) => [e.id, e]));
+    for (const [id, e] of drivingLive ?? []) if (newerEvent(byId[id], e)) byId[id] = e;
+    drivingLive = null;
+    set({ driverEvents: eventList(byId) });
+  },
+  // Events start and end rarely: apply directly.
+  applyDriverEvent: ({ event }) => {
+    if (drivingLive && newerEvent(drivingLive.get(event.id), event)) drivingLive.set(event.id, event);
+    set((s) => {
+      if (!s.driverEvents) return {};
+      const existing = s.driverEvents.find((e) => e.id === event.id);
+      if (!newerEvent(existing, event)) return {};
+      const byId = Object.fromEntries(s.driverEvents.map((e) => [e.id, e]));
+      byId[event.id] = event;
+      return { driverEvents: eventList(byId) };
+    });
   },
   setHealthRules: (healthRules) => {
     rulesAppliedAt = Date.now();

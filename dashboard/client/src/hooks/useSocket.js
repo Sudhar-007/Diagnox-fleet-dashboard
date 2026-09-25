@@ -87,14 +87,16 @@ function startResync() {
       getJson('/api/health')
         .then((health) => !cancelled && useFleetStore.getState().setPipeline(health.pipeline ?? null))
         .catch(() => {});
-      const [body, alertBody, eventBody, tripBody] = await Promise.all([
+      const [body, alertBody, eventBody, tripBody, drivingBody] = await Promise.all([
         getJson('/api/trucks'),
         getJson('/api/alerts'),
         getJson('/api/alerts/events?limit=500'),
         getJson('/api/trips?limit=1000'),
+        getJson('/api/driver-events?limit=500'),
       ]);
       if (cancelled) return;
       useFleetStore.getState().applyTrips(tripBody.trips);
+      useFleetStore.getState().applyDriverEvents(drivingBody.events);
       useFleetStore.getState().applyAlerts({ alerts: alertBody.alerts, events: eventBody.events });
       applySnapshot(body, requestedAt);
       loadTrails(
@@ -139,6 +141,7 @@ export function useSocket() {
     socket.on('zone:visit', (v) => useFleetStore.getState().addVisit(v));
     socket.on('rules:update', reloadRules);
     socket.on('trip:update', (u) => useFleetStore.getState().applyTripUpdate(u));
+    socket.on('driver:event', (u) => useFleetStore.getState().applyDriverEvent(u));
 
     return () => {
       cancelResync();

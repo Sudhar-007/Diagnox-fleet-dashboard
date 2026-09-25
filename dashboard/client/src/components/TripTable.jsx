@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Plate from './Plate.jsx';
 import { EmptyState } from './ui/Panel.jsx';
 import { formatDuration } from '../lib/format.js';
+import { scoreTone } from '../lib/driving.js';
 import { placeText, startText } from '../lib/trips.js';
 import { useFleetStore } from '../store/useFleetStore.js';
 
@@ -12,6 +13,22 @@ function AlertCount({ alerts }) {
   return (
     <span className={critical ? 'text-crit' : 'text-warn'} title={alerts.map((a) => a.name).join(', ')}>
       {alerts.length} {alerts.length === 1 ? 'alert' : 'alerts'}
+    </span>
+  );
+}
+
+// Score with the number of events that cost points; sparse readings get no score.
+function DrivingScore({ driving }) {
+  if (!driving) return <span className="text-faint">Not rated</span>;
+  if (driving.score == null) return <span className="text-faint">Readings too sparse</span>;
+  return (
+    <span>
+      <span className={`font-medium ${scoreTone(driving.score)}`}>{driving.score}</span>
+      {driving.events > 0 && (
+        <span className="text-muted">
+          , {driving.events} {driving.events === 1 ? 'event' : 'events'}
+        </span>
+      )}
     </span>
   );
 }
@@ -29,7 +46,7 @@ export default function TripTable({ trips, showTruck = true, empty }) {
   const serverNow = now + clockOffsetMs;
 
   return (
-    <table className="w-full min-w-[900px] text-left text-sm">
+    <table className="w-full min-w-[980px] text-left text-sm">
       <thead className="border-b border-line text-muted">
         <tr>
           {showTruck && <th className="px-4 py-2 font-normal">Truck</th>}
@@ -39,6 +56,7 @@ export default function TripTable({ trips, showTruck = true, empty }) {
           <th className="px-4 py-2 font-normal">Speed avg / max</th>
           <th className="px-4 py-2 font-normal">From / to</th>
           <th className="px-4 py-2 font-normal">During the trip</th>
+          <th className="px-4 py-2 font-normal">Driving score</th>
           <th className="px-4 py-2 font-normal">
             <span className="sr-only">Replay</span>
           </th>
@@ -85,6 +103,9 @@ export default function TripTable({ trips, showTruck = true, empty }) {
               </td>
               <td className="px-4 py-2.5">
                 <AlertCount alerts={t.alerts} />
+              </td>
+              <td className="px-4 py-2.5">
+                <DrivingScore driving={t.driving} />
               </td>
               <td className="whitespace-nowrap px-4 py-2.5 text-right">
                 {t.has_path !== false ? (

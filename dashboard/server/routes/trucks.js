@@ -16,6 +16,7 @@ export function trucksRouter({ fleet, store, rules }) {
       freshness: rules.freshness,
       health_rules: rules.health,
       trip_rules: rules.trips,
+      driver_rules: rules.driver,
       trucks: fleet.snapshot(),
     });
   });

@@ -10,7 +10,7 @@ Dashboard (React client on Vercel + Express BFF in Docker). Each step must leave
 - [x] 6. Vehicle list + Vehicle Details tabs (Health, Maintenance risk breakdown) + Maintenance board
 - [x] 7. Geofencing: engine + map overlay + Settings (Geofences, Alert Thresholds)
 - [x] 8. Trips derivation + Trips page + Replay
-- [ ] 9. Driver behaviour events + scores + Drivers page
+- [x] 9. Driver behaviour events + scores + Drivers page
 - [ ] 10. Fuel estimate + anomalies + Fuel page + Vehicle Fuel tab
 - [ ] 11. Analytics page (computed from ring buffer + engine outputs)
 - [ ] 12. `fastapi` / `hybrid` source wiring against the real public FastAPI endpoint (validate/coerce numeric fields in source.js; strip incoming keys that collide with derived fields; evaluate every ingested point in time order, not only the newest per batch, so a backlog uploaded after a 4G outage still raises its alerts and SOS and is counted in trips and zone visits; coerce `sos` to a real boolean; confirm with hardware where `speed` comes from and whether it reads 0 on GPS/OBD dropouts, since one such sample could look like a collision; if it is GPS speed, get the parked-truck reading to set `rules.trips.stop_speed_kmh`)
