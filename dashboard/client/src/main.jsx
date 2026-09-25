@@ -7,6 +7,7 @@ import '@fontsource/barlow/500.css';
 import '@fontsource/barlow/600.css';
 import '@fontsource/barlow-semi-condensed/500.css';
 import '@fontsource/barlow-semi-condensed/700.css';
+import 'leaflet/dist/leaflet.css';
 import './index.css';
 
 import App from './App.jsx';

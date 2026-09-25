@@ -49,3 +49,100 @@
     }
   }
 }
+
+/* Map: OSM tiles darkened to sit in the control-room palette. */
+.fleet-map {
+  background: var(--color-asphalt);
+  font-family: var(--font-sans);
+}
+
+.fleet-map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.85) saturate(0.35);
+}
+
+.fleet-map .leaflet-control-attribution {
+  background: rgb(27 32 39 / 0.85);
+  color: var(--color-muted);
+}
+
+.fleet-map .leaflet-control-attribution a {
+  color: var(--color-ink);
+}
+
+.fleet-map .leaflet-bar a {
+  background: var(--color-panel);
+  border-color: var(--color-line);
+  color: var(--color-ink);
+}
+
+.fleet-map .leaflet-bar a:hover {
+  background: var(--color-panel-hi);
+}
+
+.fleet-map .leaflet-popup-content-wrapper,
+.fleet-map .leaflet-popup-tip {
+  background: var(--color-panel);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.fleet-map .leaflet-popup-content {
+  margin: 10px 12px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Truck marker: status dot plus a small registration plate. */
+.truck-pin {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.truck-pin__dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 2px solid var(--color-asphalt);
+}
+
+.truck-pin--normal .truck-pin__dot {
+  background: var(--color-ok);
+}
+
+.truck-pin--warning .truck-pin__dot {
+  background: var(--color-warn);
+}
+
+.truck-pin--critical .truck-pin__dot {
+  background: var(--color-crit);
+}
+
+.truck-pin--stale .truck-pin__dot,
+.truck-pin--offline .truck-pin__dot {
+  background: var(--color-idle);
+}
+
+.truck-pin__plate {
+  background: var(--color-plate);
+  color: var(--color-plate-ink);
+  border: 1px solid rgb(22 20 15 / 0.8);
+  border-radius: 2px;
+  padding: 1px 4px;
+  font: 700 11px/1.2 var(--font-cond);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.truck-pin--stale .truck-pin__plate,
+.truck-pin--offline .truck-pin__plate {
+  opacity: 0.6;
+}
+
+.truck-pin--selected .truck-pin__dot {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 1px;
+}

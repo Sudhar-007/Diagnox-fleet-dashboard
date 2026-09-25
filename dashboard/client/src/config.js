@@ -11,3 +11,6 @@ export const API_URL_PROBLEM = !API_URL
     : null;
 
 export const REQUEST_TIMEOUT_MS = 5000;
+
+// Positions kept per truck for the map trail.
+export const TRAIL_POINTS = 60;

@@ -22,9 +22,11 @@ export function trucksRouter({ fleet, store, rules }) {
   r.get('/trucks/:truck_id/history', (req, res) => {
     const { truck_id } = req.params;
     if (!store.meta(truck_id)) return res.status(404).json({ error: `unknown truck_id ${truck_id}` });
+    const limit = /^[1-9]\d*$/.test(req.query.limit ?? '') ? Math.min(Number(req.query.limit), 5000) : undefined;
     const points = store.history(truck_id, {
       fromMs: parseBound(req.query.from) ?? -Infinity,
       toMs: parseBound(req.query.to) ?? Infinity,
+      limit,
     });
     res.json({ truck_id, points });
   });

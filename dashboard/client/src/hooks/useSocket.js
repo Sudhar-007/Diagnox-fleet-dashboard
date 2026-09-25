@@ -1,10 +1,24 @@
 import { useEffect } from 'react';
 import { io } from 'socket.io-client';
 
-import { API_URL, REQUEST_TIMEOUT_MS } from '../config.js';
+import { API_URL, REQUEST_TIMEOUT_MS, TRAIL_POINTS } from '../config.js';
 import { useFleetStore, queueTruckUpdate, startFlushing } from '../store/useFleetStore.js';
 
 const RETRY_MS = [1000, 2000, 4000, 8000];
+
+// Best effort: a failed trail fetch just means the trail builds up from live updates.
+function loadTrails(truckIds, isCancelled) {
+  for (const id of truckIds) {
+    fetch(`${API_URL}/api/trucks/${encodeURIComponent(id)}/history?limit=${TRAIL_POINTS}`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (body && !isCancelled()) useFleetStore.getState().seedTrail(id, body.points);
+      })
+      .catch(() => {});
+  }
+}
 
 // Fetches the full snapshot, retrying with backoff until it succeeds or a newer
 // resync supersedes it. Returns a cancel function.
@@ -19,7 +33,12 @@ function startResync() {
       const res = await fetch(`${API_URL}/api/trucks`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if (!res.ok) throw new Error(`The server answered ${res.status}`);
       const body = await res.json();
-      if (!cancelled) applySnapshot(body, requestedAt);
+      if (cancelled) return;
+      applySnapshot(body, requestedAt);
+      loadTrails(
+        body.trucks.map((t) => t.truck_id),
+        () => cancelled,
+      );
     } catch (err) {
       if (cancelled) return;
       setSyncError(err.name === 'TimeoutError' ? 'The server did not respond in time' : err.message);

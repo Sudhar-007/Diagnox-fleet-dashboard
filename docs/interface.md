@@ -4,7 +4,7 @@
 1. ESP32-WROOM + EC200U (4G) + GPS + OBD-II -> FastAPI (HTTP over 4G). Owned by hardware teammate.
 2. FastAPI -> dashboard BFF (PLANNED, not implemented yet): BFF polls `GET {FASTAPI_URL}/latest` every 1 s over HTTPS, 3 s timeout. Response assumed to be a JSON array of telemetry objects (shape not final; all mapping lives in `dashboard/server/services/source.js`). Today `DATA_SOURCE=fastapi|hybrid` logs a warning and falls back to the built-in simulator (`DATA_SOURCE=mock`, provenance `SIM`); `FASTAPI_URL` is not read by any code yet.
 3. BFF -> React (BFF default port 4000, `PORT`):
-   - REST: `GET /api/trucks` (`{ server_time, freshness, health_rules, trucks[] }`), `GET /api/trucks/:truck_id/history?from=&to=` (`{ truck_id, points[] }`, raw telemetry objects; `from`/`to` are epoch ms or contract timestamps), `GET /api/health`.
+   - REST: `GET /api/trucks` (`{ server_time, freshness, health_rules, trucks[] }`), `GET /api/trucks/:truck_id/history?from=&to=&limit=` (`{ truck_id, points[] }`, raw telemetry objects ascending; `from`/`to` are epoch ms or contract timestamps; `limit` (positive integer, max 5000) keeps the newest N points; other values are ignored), `GET /api/health`.
    - Socket.IO: `truck:update` (one derived truck object per new point, plus `server_time`). PLANNED, not emitted yet: `alert:new`, `alert:update`, `pipeline:status`.
    - Derived truck objects carry every contract field verbatim and add only: `status`, `health`, `findings`, `freshness`, `provenance`, `driver_id`, `driver_name`, `received_at` (epoch ms), `last_seen_s`, `optional_fields` (names of optional fields present).
 

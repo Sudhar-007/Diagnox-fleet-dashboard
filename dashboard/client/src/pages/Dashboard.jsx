@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
+import FleetMap from '../components/FleetMap.jsx';
 import FleetStatusBar from '../components/FleetStatusBar.jsx';
 import TruckCard from '../components/TruckCard.jsx';
 import { API_URL } from '../config.js';
@@ -33,6 +35,7 @@ export default function Dashboard() {
   const freshnessRules = useFleetStore((s) => s.freshnessRules);
   const connection = useFleetStore((s) => s.connection);
   const syncError = useFleetStore((s) => s.syncError);
+  const navigate = useNavigate();
 
   const list = useMemo(() => Object.values(trucks).sort((a, b) => a.truck_id.localeCompare(b.truck_id)), [trucks]);
 
@@ -62,6 +65,17 @@ export default function Dashboard() {
         <>
           <section aria-label="Fleet status" className="mt-5 rounded-md border border-line bg-panel px-4 py-3.5">
             <FleetStatusBar counts={counts} total={list.length} />
+          </section>
+          <section aria-label="Map" className="mt-5 overflow-hidden rounded-md border border-line">
+            <div className="flex items-center justify-between border-b border-line bg-panel px-4 py-2 text-sm">
+              <span className="text-muted">Positions update every second. Select a truck to open it on the live map.</span>
+              <Link to="/live" className="shrink-0 text-ink underline decoration-line underline-offset-4 hover:decoration-ink">
+                Open live map
+              </Link>
+            </div>
+            <div className="h-64 md:h-80">
+              <FleetMap trucks={list} compact onSelect={(id) => navigate(`/live?truck=${encodeURIComponent(id)}`)} />
+            </div>
           </section>
           <section aria-label="Trucks" className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {list.map((t) => (

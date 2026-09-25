@@ -3,7 +3,10 @@ import { NavLink, Outlet } from 'react-router-dom';
 import ConnectionState from './ConnectionState.jsx';
 import { useFleetStore } from '../store/useFleetStore.js';
 
-const NAV = [{ to: '/', label: 'Dashboard', end: true }];
+const NAV = [
+  { to: '/', label: 'Dashboard', end: true },
+  { to: '/live', label: 'Live Map' },
+];
 
 function Clock() {
   const now = useFleetStore((s) => s.now);
