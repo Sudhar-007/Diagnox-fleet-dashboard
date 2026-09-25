@@ -20,3 +20,13 @@ export function formatNumber(value, digits = 0) {
 export function findingText(f) {
   return `${f.name} · ${f.field} ${f.value} ${f.unit} ${f.op} ${f.threshold} ${f.unit}`;
 }
+
+export function formatDuration(seconds) {
+  if (seconds == null || !Number.isFinite(seconds)) return '';
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return s % 60 ? `${m} min ${s % 60} s` : `${m} min`;
+  const h = Math.floor(m / 60);
+  return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
+}

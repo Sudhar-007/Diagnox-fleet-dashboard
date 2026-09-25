@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import LiveMap from './pages/LiveMap.jsx';
+import Alerts from './pages/Alerts.jsx';
 import { API_URL, API_URL_PROBLEM } from './config.js';
 import { useSocket } from './hooks/useSocket.js';
 
@@ -36,6 +37,7 @@ function Connected() {
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="live" element={<LiveMap />} />
+        <Route path="alerts" element={<Alerts />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

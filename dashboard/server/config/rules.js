@@ -6,6 +6,11 @@ export const rules = {
     offline_after_s: 60,
   },
 
+  alerts: {
+    // An alert closes only after its field has been back within limits this long.
+    clear_after_s: 10,
+  },
+
   ingest: {
     // Points stamped this far ahead of the BFF clock are dropped (device clock not set yet).
     max_future_s: 300,

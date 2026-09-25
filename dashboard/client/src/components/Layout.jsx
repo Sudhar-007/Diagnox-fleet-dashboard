@@ -6,7 +6,29 @@ import { useFleetStore } from '../store/useFleetStore.js';
 const NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/live', label: 'Live Map' },
+  { to: '/alerts', label: 'Alerts & SOS', badge: 'alerts' },
 ];
+
+// Count of alerts nobody has acknowledged yet; red when any of them is critical.
+function UnacknowledgedCount() {
+  const alerts = useFleetStore((s) => s.alerts);
+  let count = 0;
+  let critical = false;
+  for (const a of Object.values(alerts)) {
+    if (a.status !== 'ACTIVE') continue;
+    count += 1;
+    if (a.level === 'critical') critical = true;
+  }
+  if (count === 0) return null;
+  return (
+    <span
+      className={`ml-auto rounded-full px-1.5 text-xs font-semibold leading-5 ${critical ? 'bg-crit text-white' : 'bg-warn text-asphalt'}`}
+      aria-label={`${count} unacknowledged`}
+    >
+      {count}
+    </span>
+  );
+}
 
 function Clock() {
   const now = useFleetStore((s) => s.now);
@@ -29,12 +51,13 @@ export default function Layout() {
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `shrink-0 rounded-[4px] px-3 py-1.5 text-[15px] ${
+                `flex shrink-0 items-center gap-2 rounded-[4px] px-3 py-1.5 text-[15px] ${
                   isActive ? 'bg-panel-hi font-medium text-ink' : 'text-muted hover:bg-panel-hi/60 hover:text-ink'
                 }`
               }
             >
               {item.label}
+              {item.badge === 'alerts' && <UnacknowledgedCount />}
             </NavLink>
           ))}
         </nav>

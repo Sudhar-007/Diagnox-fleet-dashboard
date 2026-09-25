@@ -8,6 +8,22 @@ import { API_URL } from '../config.js';
 import { useFleetStore } from '../store/useFleetStore.js';
 import { ageSeconds, displayStatus, freshnessOf } from '../lib/status.js';
 
+function OpenAlertsSummary() {
+  const alerts = useFleetStore((s) => s.alerts);
+  const open = Object.values(alerts).filter((a) => a.status !== 'RESOLVED');
+  const critical = open.filter((a) => a.level === 'critical').length;
+  if (open.length === 0) return <span className="text-sm text-muted">No open alerts</span>;
+  return (
+    <Link
+      to="/alerts"
+      className={`text-sm font-medium underline decoration-line underline-offset-4 hover:decoration-current ${critical ? 'text-crit' : 'text-warn'}`}
+    >
+      {open.length} open {open.length === 1 ? 'alert' : 'alerts'}
+      {critical > 0 && `, ${critical} critical`}
+    </Link>
+  );
+}
+
 function EmptyState({ connection, syncError }) {
   if (connection !== 'connected' || syncError) {
     return (
@@ -65,6 +81,9 @@ export default function Dashboard() {
         <>
           <section aria-label="Fleet status" className="mt-5 rounded-md border border-line bg-panel px-4 py-3.5">
             <FleetStatusBar counts={counts} total={list.length} />
+            <div className="mt-2.5 border-t border-line pt-2.5">
+              <OpenAlertsSummary />
+            </div>
           </section>
           <section aria-label="Map" className="mt-5 overflow-hidden rounded-md border border-line">
             <div className="flex items-center justify-between border-b border-line bg-panel px-4 py-2 text-sm">

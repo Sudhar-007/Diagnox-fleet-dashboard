@@ -73,3 +73,15 @@ export function freshnessOf(ageS, freshnessRules) {
   if (ageS > freshnessRules.stale_after_s) return 'stale';
   return 'live';
 }
+
+// Instant state of one field against every rule for it, ignoring sustain windows:
+// 'breach' | 'within' | 'unknown' (no usable value, or the rule does not apply, e.g. engine off).
+// Used to decide whether an open alert has really recovered.
+export function fieldState(point, field, healthRules) {
+  const fieldRules = healthRules.filter((r) => r.field === field);
+  const value = point[field];
+  if (fieldRules.length === 0 || !isNumber(value)) return 'unknown';
+  const applicable = fieldRules.filter((r) => ruleApplies(r, point));
+  if (applicable.length === 0) return 'unknown';
+  return applicable.some((r) => breaches(value, r.op, r.threshold)) ? 'breach' : 'within';
+}

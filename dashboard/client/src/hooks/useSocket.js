@@ -2,7 +2,13 @@ import { useEffect } from 'react';
 import { io } from 'socket.io-client';
 
 import { API_URL, REQUEST_TIMEOUT_MS, TRAIL_POINTS } from '../config.js';
-import { useFleetStore, queueTruckUpdate, startFlushing } from '../store/useFleetStore.js';
+import {
+  useFleetStore,
+  beginAlertResync,
+  queueAlertChange,
+  queueTruckUpdate,
+  startFlushing,
+} from '../store/useFleetStore.js';
 
 const RETRY_MS = [1000, 2000, 4000, 8000];
 
@@ -20,20 +26,30 @@ function loadTrails(truckIds, isCancelled) {
   }
 }
 
+async function getJson(path) {
+  const res = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`The server answered ${res.status}`);
+  return res.json();
+}
+
 // Fetches the full snapshot, retrying with backoff until it succeeds or a newer
 // resync supersedes it. Returns a cancel function.
 function startResync() {
   let cancelled = false;
   let timer = null;
+  beginAlertResync();
 
   async function attempt(n) {
     const { applySnapshot, setSyncError } = useFleetStore.getState();
     const requestedAt = Date.now();
     try {
-      const res = await fetch(`${API_URL}/api/trucks`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-      if (!res.ok) throw new Error(`The server answered ${res.status}`);
-      const body = await res.json();
+      const [body, alertBody, eventBody] = await Promise.all([
+        getJson('/api/trucks'),
+        getJson('/api/alerts'),
+        getJson('/api/alerts/events?limit=500'),
+      ]);
       if (cancelled) return;
+      useFleetStore.getState().applyAlerts({ alerts: alertBody.alerts, events: eventBody.events });
       applySnapshot(body, requestedAt);
       loadTrails(
         body.trucks.map((t) => t.truck_id),
@@ -69,6 +85,8 @@ export function useSocket() {
     socket.on('disconnect', () => setConnection('reconnecting'));
     socket.on('connect_error', () => setConnection('reconnecting'));
     socket.on('truck:update', queueTruckUpdate);
+    socket.on('alert:new', queueAlertChange);
+    socket.on('alert:update', queueAlertChange);
 
     return () => {
       cancelResync();
