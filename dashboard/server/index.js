@@ -56,6 +56,7 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'not found' }));
 source.start();
 server.listen(PORT, () => {
   console.log(`[bff] listening on :${PORT}, data source ${source.mode()}`);
+  console.log(`[bff] CORS origins: ${allowedOrigins.map(String).join(', ')}`);
 });
 
 function shutdown() {

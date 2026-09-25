@@ -1,0 +1,13 @@
+# Local run of the fleet server. Works fully offline with DATA_SOURCE=mock.
+services:
+  server:
+    build: ./server
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      DATA_SOURCE: ${DATA_SOURCE:-mock}
+      FASTAPI_URL: ${FASTAPI_URL:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      TZ: Asia/Kolkata
+    restart: unless-stopped

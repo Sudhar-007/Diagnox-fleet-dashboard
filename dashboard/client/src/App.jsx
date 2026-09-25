@@ -2,16 +2,27 @@ import { Route, Routes } from 'react-router-dom';
 
 import Layout from './components/Layout.jsx';
 import Dashboard from './pages/Dashboard.jsx';
-import { API_CONFIGURED } from './config.js';
+import { API_URL, API_URL_PROBLEM } from './config.js';
 import { useSocket } from './hooks/useSocket.js';
 
-function MissingConfig() {
+function ConfigProblem({ problem }) {
   return (
     <main className="mx-auto max-w-xl px-4 py-16 text-[15px]">
-      <h1 className="font-cond text-2xl font-bold">Backend URL not set</h1>
+      <h1 className="font-cond text-2xl font-bold">
+        {problem === 'missing' ? 'Backend URL not set' : 'Backend URL must use HTTPS'}
+      </h1>
       <p className="mt-2 text-muted">
-        This build has no <code className="text-ink">VITE_API_URL</code>. Set it to the fleet server's HTTPS URL in the
-        hosting project's environment variables and redeploy.
+        {problem === 'missing' ? (
+          <>
+            This build has no <code className="text-ink">VITE_API_URL</code>.
+          </>
+        ) : (
+          <>
+            This build points at <code className="text-ink">{API_URL}</code>, which browsers block on an HTTPS page.
+          </>
+        )}{' '}
+        Set <code className="text-ink">VITE_API_URL</code> to the fleet server's https:// URL for both Production and
+        Preview in the hosting project's environment variables, then redeploy.
       </p>
     </main>
   );
@@ -34,5 +45,5 @@ function NotFound() {
 }
 
 export default function App() {
-  return API_CONFIGURED ? <Connected /> : <MissingConfig />;
+  return API_URL_PROBLEM ? <ConfigProblem problem={API_URL_PROBLEM} /> : <Connected />;
 }

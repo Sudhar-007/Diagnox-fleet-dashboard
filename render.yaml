@@ -1,0 +1,23 @@
+services:
+  - type: web
+    runtime: docker
+    name: diagnox-fleet-bff
+    rootDir: dashboard/server
+    branch: main
+    region: singapore
+    # Free instances sleep after inactivity; switch to starter before demo day.
+    plan: free
+    numInstances: 1
+    healthCheckPath: /api/health
+    buildFilter:
+      paths:
+        - dashboard/server/**
+    envVars:
+      - key: DATA_SOURCE
+        value: mock
+      - key: TZ
+        value: Asia/Kolkata
+      - key: CORS_ORIGINS
+        sync: false
+      - key: FASTAPI_URL
+        sync: false
