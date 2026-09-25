@@ -18,6 +18,7 @@ import { createScenarioService } from './services/scenarios.js';
 import { computePipeline } from './services/pipeline.js';
 import { originChecker } from './services/cors.js';
 import { parseTs } from './engine/time.js';
+import { loadForest } from './engine/mlRisk.js';
 import { appliesTo, distanceM, hasFix } from './engine/geofence.js';
 import { trucksRouter } from './routes/trucks.js';
 import { healthRouter } from './routes/health.js';
@@ -35,12 +36,16 @@ import { analyticsRouter } from './routes/analytics.js';
 // the simulator, `sim` (used by demo scenarios). `onPoints(points, provenance, { backfill })`:
 // backfilled points (warm start history) are stored and fed to the timeline engines only (trips,
 // driver events, risk sampling, fuel); they raise no alerts and are not broadcast.
+// Read once; every server instance shares the same read-only model.
+const maintenanceForest = loadForest();
+
 export function createServer({
   rules: baseRules,
   allowedOrigins,
   makeSource,
   storage = createMemoryStorage(),
   demoEnabled = true,
+  forest = maintenanceForest,
   log = console,
 }) {
   // Thresholds are edited at runtime (Settings), so each server works on its own copy.
@@ -57,7 +62,7 @@ export function createServer({
     onVisit: (visit) => io.emit('zone:visit', visit),
   });
   const fuel = createFuelService({ rules, capacityOf: (id) => registry.truckInfo(id).tank_capacity_l });
-  const fleet = createFleet({ store, rules, registry, zonesInside: alerts.zonesInside, fuelOf: fuel.of });
+  const fleet = createFleet({ store, rules, registry, zonesInside: alerts.zonesInside, fuelOf: fuel.of, forest });
   const trips = createTripService({
     rules,
     zones: geofences.list,

@@ -19,6 +19,11 @@ const KINDS = {
     title: 'Entered by a person in the dashboard',
     className: 'border-line text-ink',
   },
+  ML_MODEL: {
+    label: 'ML MODEL',
+    title: 'Scored by the maintenance model in the fleet server (trained on synthetic data)',
+    className: 'border-dashed border-muted text-muted',
+  },
   RULE_BASED: {
     label: 'RULE-BASED',
     title: 'Computed from threshold rules in rules.js',

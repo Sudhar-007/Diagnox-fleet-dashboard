@@ -7,6 +7,7 @@ import ServiceRecordForm from '../components/ServiceRecordForm.jsx';
 import Button from '../components/ui/Button.jsx';
 import Panel, { EmptyState } from '../components/ui/Panel.jsx';
 import { FIELD_LABEL } from '../lib/fields.js';
+import { mlMissingText } from '../lib/mlRisk.js';
 import { useServiceRecords } from '../hooks/useServiceRecords.js';
 import { useFleetStore } from '../store/useFleetStore.js';
 
@@ -83,7 +84,7 @@ export default function Maintenance() {
             <tbody className="divide-y divide-line">
               {rows.map(({ id, live, last, openAlerts }) => {
                 const top = live?.risk_breakdown?.[0];
-                const ml = live?.maintenance_risk_score;
+                const ml = live?.ml_risk?.score;
                 return (
                   <tr key={id} className="align-middle">
                     <td className="px-4 py-2.5">
@@ -106,7 +107,11 @@ export default function Maintenance() {
                       )}
                     </td>
                     <td className="px-4 py-2.5">
-                      {typeof ml === 'number' ? <span className="text-ink">{ml}</span> : <span className="text-faint">Not connected</span>}
+                      {typeof ml === 'number' ? (
+                        <span className="text-ink">{ml}</span>
+                      ) : (
+                        <span className="text-faint">{live ? mlMissingText(live.ml_risk) : ''}</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5">
                       {last ? (

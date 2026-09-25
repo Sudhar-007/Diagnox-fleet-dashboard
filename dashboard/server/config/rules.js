@@ -26,6 +26,12 @@ export const rules = {
     weights: { coolant_temp: 30, oil_temp: 20, battery_voltage: 20, engine_load: 15, rpm: 10, speed: 5 },
   },
 
+  ml: {
+    // Maintenance model score = mean breakdown probability over engine-running readings in
+    // this window, so one odd reading does not flip it.
+    window_s: 60,
+  },
+
   geofence: {
     // Consecutive points on the same side of a zone edge needed to confirm an entry or exit,
     // so GPS jitter near the edge does not flap.

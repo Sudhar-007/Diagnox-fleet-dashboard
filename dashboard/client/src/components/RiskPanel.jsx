@@ -1,13 +1,15 @@
 import ProvenanceBadge from './ProvenanceBadge.jsx';
 import { FIELD_LABEL } from '../lib/fields.js';
 import { formatDuration } from '../lib/format.js';
+import { mlBadgeKind, mlMissingText } from '../lib/mlRisk.js';
 
 const pct = (x) => `${Math.round(x * 100)} %`;
 
 // Rule score next to the ML score, and exactly which readings earned which points.
 export default function RiskPanel({ truck }) {
   const breakdown = truck.risk_breakdown ?? [];
-  const ml = truck.maintenance_risk_score;
+  const ml = truck.ml_risk;
+  const mlScore = ml?.score;
 
   return (
     <div className="space-y-4">
@@ -23,15 +25,15 @@ export default function RiskPanel({ truck }) {
         </div>
         <div>
           <div className="flex items-center gap-2 text-sm text-muted">
-            ML score {typeof ml === 'number' && <ProvenanceBadge kind={truck.provenance} />}
+            ML score {typeof mlScore === 'number' && <ProvenanceBadge kind={mlBadgeKind(truck)} />}
           </div>
-          {typeof ml === 'number' ? (
+          {typeof mlScore === 'number' ? (
             <div className="mt-1 font-cond text-4xl font-bold leading-none">
-              {ml}
+              {mlScore}
               <span className="ml-1 text-lg font-medium text-muted">/ 100</span>
             </div>
           ) : (
-            <p className="mt-2 text-[15px] text-muted">ML model: not connected</p>
+            <p className="mt-2 text-[15px] text-muted">ML model: {mlMissingText(ml).toLowerCase()}</p>
           )}
         </div>
       </div>
@@ -41,6 +43,16 @@ export default function RiskPanel({ truck }) {
         threshold × (0.5 + 0.5 × how far past, as a share of the way to critical). Weights and thresholds are
         demo-tuned values in rules.js.
       </p>
+
+      {ml?.source === 'device' ? (
+        <p className="max-w-[72ch] text-sm text-muted">ML score as sent by the truck with its latest reading.</p>
+      ) : (
+        <p className="max-w-[72ch] text-sm text-muted">
+          ML score: the maintenance model's breakdown probability, averaged over the last {ml?.window_s ?? 60} s of
+          readings with the engine running{ml?.state === 'ok' ? ` (${ml.readings} readings)` : ''}. Engine-off
+          readings are not scored. The model was trained on synthetic data, so treat it as a demo signal.
+        </p>
+      )}
 
       {breakdown.length === 0 ? (
         <p className="text-[15px] text-muted">Nothing has been past a warning threshold in the last 10 minutes.</p>

@@ -25,3 +25,6 @@ Thumbs.db
 
 # local data written by the fleet server
 dashboard/server/data/
+
+# ML model binary (rebuild with ml/train_model.py)
+ml/model.pkl
