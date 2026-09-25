@@ -11,6 +11,11 @@ export const rules = {
     clear_after_s: 10,
   },
 
+  sos: {
+    // Possible collision (heuristic): speed falls from >= from_kmh to <= to_kmh within within_s.
+    collision: { from_kmh: 40, to_kmh: 5, within_s: 3 },
+  },
+
   ingest: {
     // Points stamped this far ahead of the BFF clock are dropped (device clock not set yet).
     max_future_s: 300,

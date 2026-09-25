@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-export function healthRouter({ source, fleet, startedAt }) {
+export function healthRouter({ source, fleet, startedAt, pipeline }) {
   const r = Router();
 
   r.get('/health', (req, res) => {
@@ -10,6 +10,7 @@ export function healthRouter({ source, fleet, startedAt }) {
       requested_data_source: source.requestedMode(),
       uptime_s: Math.round((Date.now() - startedAt) / 1000),
       trucks: fleet.snapshot().length,
+      pipeline: pipeline(),
       server_time: Date.now(),
     });
   });

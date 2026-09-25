@@ -14,6 +14,11 @@ const KINDS = {
     title: 'Derived by a model, not measured',
     className: 'border-dashed border-muted text-muted',
   },
+  MANUAL: {
+    label: 'MANUAL',
+    title: 'Entered by a person in the dashboard',
+    className: 'border-line text-ink',
+  },
   RULE_BASED: {
     label: 'RULE-BASED',
     title: 'Computed from threshold rules in rules.js',

@@ -1,7 +1,9 @@
 import AlertActions from './AlertActions.jsx';
 import ProvenanceBadge from './ProvenanceBadge.jsx';
-import { alertText } from '../lib/alerts.js';
-import { formatDuration } from '../lib/format.js';
+import { Link } from 'react-router-dom';
+
+import { alertText, formatPosition } from '../lib/alerts.js';
+import { formatClock, formatDuration } from '../lib/format.js';
 import { useFleetStore } from '../store/useFleetStore.js';
 
 const LEVEL_DOT = { critical: 'bg-crit', warning: 'bg-warn' };
@@ -74,8 +76,25 @@ export default function AlertRow({ alert, actions = true }) {
                 Worst {alert.peak_value} {alert.unit}
               </span>
             )}
-            {open && <ConditionNote alert={alert} live={typeof live === 'number' ? live : null} />}
+            {open && alert.kind === 'health' && (
+              <ConditionNote alert={alert} live={typeof live === 'number' ? live : null} />
+            )}
           </div>
+
+          {alert.kind === 'sos' && (
+            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted">
+              <span>
+                Last position {formatPosition(alert.latitude, alert.longitude)} at {formatClock(alert.location_at)}
+              </span>
+              <Link
+                to={`/live?truck=${encodeURIComponent(alert.truck_id)}`}
+                className="text-ink underline decoration-line underline-offset-4 hover:decoration-ink"
+              >
+                View on map
+              </Link>
+              {alert.raised_by && <span>Raised by {alert.raised_by}</span>}
+            </p>
+          )}
 
           {alert.acknowledged_at && (
             <p className="mt-1 text-sm text-muted">

@@ -43,6 +43,10 @@ function startResync() {
     const { applySnapshot, setSyncError } = useFleetStore.getState();
     const requestedAt = Date.now();
     try {
+      // The pipeline strip is optional: its failure must not block trucks and alerts.
+      getJson('/api/health')
+        .then((health) => !cancelled && useFleetStore.getState().setPipeline(health.pipeline ?? null))
+        .catch(() => {});
       const [body, alertBody, eventBody] = await Promise.all([
         getJson('/api/trucks'),
         getJson('/api/alerts'),
@@ -87,6 +91,7 @@ export function useSocket() {
     socket.on('truck:update', queueTruckUpdate);
     socket.on('alert:new', queueAlertChange);
     socket.on('alert:update', queueAlertChange);
+    socket.on('pipeline:status', (p) => useFleetStore.getState().setPipeline(p));
 
     return () => {
       cancelResync();

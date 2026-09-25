@@ -82,6 +82,7 @@ export const useFleetStore = create((set) => ({
   healthRules: null,
   clockOffsetMs: 0,
   connection: 'connecting',
+  pipeline: null,
   syncError: null,
   now: Date.now(),
 
@@ -126,6 +127,8 @@ export const useFleetStore = create((set) => ({
     set({ alerts: capAlerts(byId), alertEvents: merged, alertsLoaded: true });
   },
   setConnection: (connection) => set({ connection }),
+  // Pushed every 2 s; small and rare enough to apply directly.
+  setPipeline: (pipeline) => set({ pipeline }),
   setSyncError: (syncError) => set({ syncError }),
 }));
 

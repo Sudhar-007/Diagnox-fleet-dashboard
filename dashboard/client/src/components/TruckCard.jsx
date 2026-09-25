@@ -32,9 +32,18 @@ export default function TruckCard({ truck }) {
   const { age, freshness, status } = useTruckStatus(truck);
   const loadRule = useFleetStore((s) => s.healthRules?.find((r) => r.field === 'engine_load'));
   const dim = freshness !== 'live';
+  const sos = useFleetStore((s) =>
+    Object.values(s.alerts).find((a) => a.kind === 'sos' && a.truck_id === truck.truck_id && a.status !== 'RESOLVED'),
+  );
 
   return (
-    <article className="rounded-md border border-line bg-panel p-4">
+    <article className={`rounded-md border bg-panel p-4 ${sos ? 'border-crit' : 'border-line'}`}>
+      {sos && (
+        <p className="mb-3 flex items-center gap-2 text-sm font-medium text-crit">
+          <span className="rounded-[2px] bg-crit px-1.5 font-cond font-bold text-white">SOS</span>
+          {sos.name}, {sos.status.toLowerCase()}
+        </p>
+      )}
       <header className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <Plate truckId={truck.truck_id} />

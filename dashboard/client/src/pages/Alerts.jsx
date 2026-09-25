@@ -17,12 +17,13 @@ const LEVEL_FILTERS = [
 
 function ActiveTab({ alerts }) {
   const [level, setLevel] = useState('all');
+  const sosCount = alerts.filter((a) => a.kind === 'sos').length;
   const shown = alerts.filter((a) => level === 'all' || a.level === level);
 
   return (
     <Panel
       bodyClassName=""
-      title={`${alerts.length} open ${alerts.length === 1 ? 'alert' : 'alerts'}`}
+      title={`${alerts.length} open${sosCount ? `, including ${sosCount} SOS` : ''}`}
       actions={
         <div className="flex gap-1" role="group" aria-label="Filter by level">
           {LEVEL_FILTERS.map((f) => (
@@ -42,7 +43,7 @@ function ActiveTab({ alerts }) {
       {shown.length === 0 ? (
         <EmptyState>
           {alerts.length === 0
-            ? 'No open alerts. Every truck is within its health thresholds.'
+            ? 'No open alerts or SOS. Every truck is within its health thresholds.'
             : `No ${level} alerts open.`}
         </EmptyState>
       ) : (
@@ -145,7 +146,9 @@ function ResponseHistoryTab({ resolved }) {
                     <span className={a.level === 'critical' ? 'text-crit' : 'text-warn'}>{a.name}</span>
                   </div>
                   <div className="mt-0.5 text-muted">
-                    {a.field} {a.value} {a.unit} {a.op} {a.threshold} {a.unit}
+                    {a.kind === 'sos'
+                      ? a.detail ?? 'SOS'
+                      : `${a.field} ${a.value} ${a.unit} ${a.op} ${a.threshold} ${a.unit}`}
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-2 text-muted">{a.opened_at.slice(11)}</td>

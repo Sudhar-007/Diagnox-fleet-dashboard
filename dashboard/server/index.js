@@ -13,10 +13,13 @@ if (!process.env.TZ) {
 const PORT = Number(process.env.PORT) || 4000;
 const DATA_SOURCE = process.env.DATA_SOURCE || 'mock';
 const allowedOrigins = parseOrigins(process.env.CORS_ORIGINS || 'http://localhost:5173');
+// Demo scenario panel. Set DEMO_ENABLED=false to stop anyone triggering scenarios.
+const DEMO_ENABLED = (process.env.DEMO_ENABLED ?? 'true') !== 'false';
 
 const bff = createServer({
   rules,
   allowedOrigins,
+  demoEnabled: DEMO_ENABLED,
   makeSource: (onPoints) => createSource({ mode: DATA_SOURCE, onPoints }),
 });
 

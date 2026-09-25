@@ -56,8 +56,27 @@ function initTruck(truck_id, route, index) {
   return truck;
 }
 
+// A running demo scenario may force the speed profile (e.g. a crash stop).
+function advanceForced(truck, dt, speed) {
+  const prevSpeed = truck.speed;
+  truck.phase = 'drive';
+  truck.engineOn = true;
+  truck.speed = clamp(speed, 0, 120);
+  truck.dist += (truck.speed / 3.6) * dt;
+  let { length } = segmentOf(truck);
+  while (length > 0 && truck.dist >= length) {
+    truck.dist -= length;
+    truck.seg = (truck.seg + 1) % truck.route.length;
+    ({ length } = segmentOf(truck));
+  }
+  return prevSpeed;
+}
+
 function advance(truck, dt) {
   truck.t += dt;
+  const sc = truck.scenario;
+  const forced = sc?.def.speedAt?.(sc.tRel, truck.speed);
+  if (forced !== undefined && forced !== null) return advanceForced(truck, dt, forced);
   const prevSpeed = truck.speed;
 
   if (truck.phase === 'dwell') {
@@ -66,6 +85,7 @@ function advance(truck, dt) {
     truck.dwellElapsed += dt;
     const wp = truck.route[truck.seg];
     if (wp.dwell_s >= ENGINE_OFF_DWELL_S && truck.dwellElapsed >= ENGINE_OFF_AFTER_S) truck.engineOn = false;
+    if (sc?.def.forceEngine) truck.engineOn = true;
     if (truck.dwellLeft <= 0) {
       truck.phase = 'drive';
       truck.engineOn = true;
@@ -151,19 +171,37 @@ function readings(truck, prevSpeed, dt, timestamp) {
 
 export function createSimulator({ routes, truckIds = Object.keys(routes) }) {
   const trucks = truckIds.map((id, i) => initTruck(id, routes[id], i));
+  const byId = new Map(trucks.map((t) => [t.truck_id, t]));
   let timer = null;
 
   function step(nowMs, dt = 1) {
     const timestamp = formatTs(nowMs);
-    return trucks.map((truck) => {
+    const out = [];
+    for (const truck of trucks) {
+      if (truck.scenario) {
+        truck.scenario.tRel = (nowMs - truck.scenario.startMs) / 1000;
+        if (truck.scenario.tRel >= truck.scenario.def.duration_s) truck.scenario = null;
+      }
+      const sc = truck.scenario;
       const prevSpeed = advance(truck, dt);
-      return readings(truck, prevSpeed, dt, timestamp);
-    });
+      const point = readings(truck, prevSpeed, dt, timestamp);
+      if (sc?.def.apply) sc.def.apply(sc.tRel, point);
+      if (sc?.def.silent?.(sc.tRel)) continue;
+      out.push(point);
+    }
+    return out;
   }
 
   return {
     truckIds: () => trucks.map((t) => t.truck_id),
     step,
+    // Runs a scenario definition (see sim/scenarios.js) on one truck from startMs.
+    inject(truck_id, def, startMs) {
+      const truck = byId.get(truck_id);
+      if (!truck) return false;
+      truck.scenario = { def, startMs, tRel: 0 };
+      return true;
+    },
     start(onPoints, intervalMs = 1000) {
       if (timer) return;
       // Never step backwards: if the wall clock is moved back, keep time moving forward so

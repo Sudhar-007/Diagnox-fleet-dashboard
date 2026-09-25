@@ -5,6 +5,7 @@ import L from 'leaflet';
 import Plate from './Plate.jsx';
 import StatusBadge from './StatusBadge.jsx';
 import ProvenanceBadge from './ProvenanceBadge.jsx';
+import TriggerSosButton from './TriggerSosButton.jsx';
 import { useFleetStore } from '../store/useFleetStore.js';
 import { useTruckStatus } from '../lib/useTruckStatus.js';
 import { formatAgo, formatNumber } from '../lib/format.js';
@@ -41,14 +42,16 @@ const escapeHtml = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 const iconCache = new Map();
-function truckIcon(truckId, status, selected) {
-  const key = `${truckId}|${status}|${selected}`;
+function truckIcon(truckId, status, selected, sos) {
+  const key = `${truckId}|${status}|${selected}|${sos}`;
   if (!iconCache.has(key)) {
     iconCache.set(
       key,
       L.divIcon({
-        className: `truck-pin truck-pin--${status}${selected ? ' truck-pin--selected' : ''}`,
-        html: `<span class="truck-pin__dot"></span><span class="truck-pin__plate">${escapeHtml(truckId)}</span>`,
+        className: `truck-pin truck-pin--${status}${selected ? ' truck-pin--selected' : ''}${sos ? ' truck-pin--sos' : ''}`,
+        html: `<span class="truck-pin__dot"></span><span class="truck-pin__plate">${escapeHtml(truckId)}</span>${
+          sos ? '<span class="truck-pin__sos">SOS</span>' : ''
+        }`,
         iconSize: [72, 20],
         iconAnchor: [8, 10],
         popupAnchor: [0, -10],
@@ -119,7 +122,10 @@ function FlyToSelected({ truck }) {
 function TruckLayer({ truck, trail, selected, onSelect, compact }) {
   const { age, status } = useTruckStatus(truck);
   const markerRef = useRef(null);
-  const icon = truckIcon(truck.truck_id, status, selected);
+  const sos = useFleetStore((s) =>
+    Object.values(s.alerts).some((a) => a.kind === 'sos' && a.truck_id === truck.truck_id && a.status !== 'RESOLVED'),
+  );
+  const icon = truckIcon(truck.truck_id, status, selected, sos);
   const path = useMemo(() => trail.map((p) => [p.lat, p.lng]), [trail]);
 
   useEffect(() => {
@@ -162,6 +168,9 @@ function TruckLayer({ truck, trail, selected, onSelect, compact }) {
                 <dd className="text-ink">{formatAgo(age)}</dd>
               </dl>
               <ProvenanceBadge kind={truck.provenance} />
+              <div className="border-t border-line pt-2">
+                <TriggerSosButton truckId={truck.truck_id} />
+              </div>
             </div>
           </Popup>
         )}

@@ -146,3 +146,18 @@
   outline: 2px solid var(--color-ink);
   outline-offset: 1px;
 }
+
+.truck-pin__sos {
+  background: var(--color-crit);
+  color: #fff;
+  border-radius: 2px;
+  padding: 1px 4px;
+  font: 700 11px/1.2 var(--font-cond);
+  letter-spacing: 0.03em;
+}
+
+.truck-pin--sos .truck-pin__dot {
+  background: var(--color-crit);
+  outline: 2px solid var(--color-crit);
+  outline-offset: 2px;
+}

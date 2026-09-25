@@ -1,5 +1,6 @@
 import { planAlertChanges, worseValue } from '../engine/alerts.js';
 import { fieldState } from '../engine/health.js';
+import { detectCollision } from '../engine/sos.js';
 import { formatTs, parseTs } from '../engine/time.js';
 
 export const ALERT_STATUS = ['ACTIVE', 'ACKNOWLEDGED', 'RESOLVED'];
@@ -17,12 +18,22 @@ export class AlertActionError extends Error {
 // { kind: 'new' | 'update', alert, event } (event is null for condition-only changes)
 // so the caller can broadcast it.
 //
-// alert.condition: 'firing' | 'within' (recovering) | 'unknown' (cannot judge, e.g. engine off)
-//                  | 'no_data' (truck stopped reporting) | 'cleared' (closed on its own)
+// alert.kind: 'health' (threshold rules) | 'sos' (emergency; only ever closed by a person)
+// alert.condition (health): 'firing' | 'within' (recovering) | 'unknown' (cannot judge,
+//   e.g. engine off) | 'no_data' (truck stopped reporting) | 'cleared' (closed on its own)
+
+const SOS_TRIGGERS = {
+  manual: { name: 'SOS: manual trigger', source: 'MANUAL' },
+  hardware: { name: 'SOS: panic button', source: null }, // provenance of the truck's feed
+  collision: { name: 'Possible collision (heuristic)', source: 'RULE_BASED' },
+};
 export function createAlertService({ rules, maxAlerts = 1000, maxEvents = 2000 }) {
   const alerts = new Map(); // id -> alert, insertion ordered (oldest first)
   const openByTruck = new Map(); // truck_id -> Map(field -> alert)
   const suppressedByTruck = new Map(); // truck_id -> Map(field -> { level, within_since_ms })
+  const openSosByTruck = new Map(); // truck_id -> open SOS alert (at most one per truck)
+  const lastSosFlag = new Map(); // truck_id -> last hardware sos value (raise on false -> true only)
+  const lastCollisionMs = new Map(); // truck_id -> telemetry ms of the last collision trigger
   const events = [];
   let alertSeq = 0;
   let eventSeq = 0;
@@ -55,6 +66,7 @@ export function createAlertService({ rules, maxAlerts = 1000, maxEvents = 2000 }
       op: alert.op,
       threshold: alert.threshold,
       unit: alert.unit,
+      ...(alert.kind === 'sos' ? { trigger: alert.trigger, detail: alert.detail } : {}),
       at: formatTs(nowMs),
       at_ms: nowMs,
       ...extra,
@@ -84,13 +96,84 @@ export function createAlertService({ rules, maxAlerts = 1000, maxEvents = 2000 }
     alert.resolution = resolution;
     alert.resolved_by = by;
     alert.resolve_note = note;
-    openFor(alert.truck_id).delete(alert.field);
+    if (alert.kind === 'sos') openSosByTruck.delete(alert.truck_id);
+    else openFor(alert.truck_id).delete(alert.field);
   }
 
-  // Feed one derived truck payload (from fleet.ingest). Returns the changes.
-  function evaluate(truck, nowMs = Date.now()) {
+  // Opens an SOS for a truck, capturing its last known position, time and driver.
+  // Returns null when the truck already has an open SOS.
+  function openSos(truck, { trigger, detail = null, by = null, note = null, evidence = null }, nowMs) {
+    if (openSosByTruck.has(truck.truck_id)) return null;
+    const t = SOS_TRIGGERS[trigger];
+    const alert = {
+      id: `A${++alertSeq}`,
+      kind: 'sos',
+      source: t.source ?? truck.provenance ?? 'SIM',
+      trigger,
+      truck_id: truck.truck_id,
+      driver_name: truck.driver_name ?? null,
+      name: t.name,
+      level: 'critical',
+      detail,
+      evidence,
+      field: trigger === 'collision' ? 'speed' : null,
+      op: null,
+      threshold: null,
+      unit: trigger === 'collision' ? 'km/h' : null,
+      latitude: truck.latitude ?? null,
+      longitude: truck.longitude ?? null,
+      location_at: truck.timestamp ?? null,
+      raised_by: by,
+      raise_note: note,
+      condition: null,
+      status: 'ACTIVE',
+      opened_at: trigger === 'manual' ? formatTs(nowMs) : truck.timestamp,
+      opened_ms: nowMs,
+      acknowledged_at: null,
+      acknowledged_ms: null,
+      acknowledged_by: null,
+      ack_note: null,
+      resolved_at: null,
+      resolved_ms: null,
+      resolved_by: null,
+      resolve_note: null,
+      resolution: null,
+    };
+    alerts.set(alert.id, alert);
+    openSosByTruck.set(truck.truck_id, alert);
+    return { kind: 'new', ...record(alert, 'opened', nowMs, { by, note }) };
+  }
+
+  // Automatic SOS triggers: the hardware panic flag and the collision heuristic.
+  function evaluateSos(truck, history, nowMs) {
+    const id = truck.truck_id;
+    // Only a change to true raises an SOS, so a latching button that keeps sending
+    // true does not reopen it every time someone resolves it.
+    const flag = truck.sos === true;
+    const wasSet = lastSosFlag.get(id) === true;
+    lastSosFlag.set(id, flag);
+    if (flag) {
+      if (wasSet) return [];
+      const change = openSos(truck, { trigger: 'hardware', detail: 'sos flag from the truck' }, nowMs);
+      return change ? [change] : [];
+    }
+    // Each fast point can trigger at most once, even if it is still inside the window.
+    const since = lastCollisionMs.get(id) ?? -Infinity;
+    const window = history.filter((p) => (parseTs(p.timestamp) ?? -Infinity) > since);
+    const hit = detectCollision(truck, window, rules.sos.collision);
+    if (!hit) return [];
+    lastCollisionMs.set(id, parseTs(truck.timestamp));
+    const detail = `speed ${hit.from_speed} to ${hit.to_speed} km/h in ${hit.seconds} s`;
+    const change = openSos(truck, { trigger: 'collision', detail, evidence: hit }, nowMs);
+    return change ? [change] : [];
+  }
+
+  // Feed one derived truck payload (from fleet.ingest) and its recent prior points.
+  // Returns the changes.
+  function evaluate(truck, nowMs = Date.now(), history = []) {
     const tMs = parseTs(truck.timestamp);
     if (tMs == null) return [];
+    const sosChanges = evaluateSos(truck, history, nowMs);
     const open = openFor(truck.truck_id);
     const suppressed = suppressedFor(truck.truck_id);
     const plan = planAlertChanges({
@@ -198,7 +281,7 @@ export function createAlertService({ rules, maxAlerts = 1000, maxEvents = 2000 }
     }
 
     prune();
-    return changes;
+    return [...sosChanges, ...changes];
   }
 
   // Marks open alerts of trucks that stopped reporting, so nobody reads a silent truck as
@@ -251,23 +334,38 @@ export function createAlertService({ rules, maxAlerts = 1000, maxEvents = 2000 }
 
     // Resolving while the value is still out of limits: stay quiet until it recovers,
     // otherwise the next point would reopen it immediately.
-    if (alert.condition === 'firing') {
+    if (alert.kind === 'health' && alert.condition === 'firing') {
       suppressedFor(alert.truck_id).set(alert.field, { level: alert.level, within_since_ms: null });
     }
     close(alert, nowMs, { resolution: 'manual', by: cleanBy, note: cleanNote });
     return record(alert, 'resolved', nowMs, { by: cleanBy, note: cleanNote });
   }
 
-  function list({ status, truck_id } = {}) {
+  function list({ status, truck_id, kind } = {}) {
     let out = [...alerts.values()];
+    if (kind) out = out.filter((a) => a.kind === kind);
     if (status === 'open') out = out.filter((a) => a.status !== 'RESOLVED');
     else if (status) out = out.filter((a) => a.status === status);
     if (truck_id) out = out.filter((a) => a.truck_id === truck_id);
     return out.map((a) => ({ ...a })).reverse();
   }
 
+  // Manual SOS from the dashboard. Throws when the truck already has one open.
+  function raiseSos(truck, { by, note } = {}, nowMs = Date.now()) {
+    if (note != null && (typeof note !== 'string' || note.length > NOTE_MAX)) {
+      throw new AlertActionError(400, `note must be text up to ${NOTE_MAX} characters`);
+    }
+    if (by != null && (typeof by !== 'string' || by.length > BY_MAX)) {
+      throw new AlertActionError(400, `by must be text up to ${BY_MAX} characters`);
+    }
+    const change = openSos(truck, { trigger: 'manual', by: by?.trim() || null, note: note?.trim() || null }, nowMs);
+    if (!change) throw new AlertActionError(409, `${truck.truck_id} already has an open SOS`);
+    return change;
+  }
+
   return {
     evaluate,
+    raiseSos,
     sweep,
     act,
     list,

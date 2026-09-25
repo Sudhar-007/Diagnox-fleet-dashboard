@@ -1,6 +1,8 @@
 import { NavLink, Outlet } from 'react-router-dom';
 
-import ConnectionState from './ConnectionState.jsx';
+import PipelineStrip from './PipelineStrip.jsx';
+import SOSBanner from './SOSBanner.jsx';
+import ScenarioPanel from './ScenarioPanel.jsx';
 import { useFleetStore } from '../store/useFleetStore.js';
 
 const NAV = [
@@ -65,12 +67,14 @@ export default function Layout() {
 
       <div className="min-w-0">
         <header className="flex h-12 items-center justify-between gap-4 border-b border-line px-4 md:px-6">
-          <ConnectionState />
+          <PipelineStrip />
           <Clock />
         </header>
+        <SOSBanner />
         <main className="px-4 py-5 md:px-6">
           <Outlet />
         </main>
+        <ScenarioPanel />
       </div>
     </div>
   );

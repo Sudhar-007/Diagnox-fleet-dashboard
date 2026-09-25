@@ -11,16 +11,28 @@ import { ageSeconds, displayStatus, freshnessOf } from '../lib/status.js';
 function OpenAlertsSummary() {
   const alerts = useFleetStore((s) => s.alerts);
   const open = Object.values(alerts).filter((a) => a.status !== 'RESOLVED');
-  const critical = open.filter((a) => a.level === 'critical').length;
-  if (open.length === 0) return <span className="text-sm text-muted">No open alerts</span>;
+  const sos = open.filter((a) => a.kind === 'sos').length;
+  const health = open.filter((a) => a.kind !== 'sos');
+  const critical = health.filter((a) => a.level === 'critical').length;
+  const link = 'text-sm font-medium underline decoration-line underline-offset-4 hover:decoration-current';
   return (
-    <Link
-      to="/alerts"
-      className={`text-sm font-medium underline decoration-line underline-offset-4 hover:decoration-current ${critical ? 'text-crit' : 'text-warn'}`}
-    >
-      {open.length} open {open.length === 1 ? 'alert' : 'alerts'}
-      {critical > 0 && `, ${critical} critical`}
-    </Link>
+    <div className="flex flex-wrap gap-x-6 gap-y-1">
+      {sos > 0 ? (
+        <Link to="/alerts" className={`${link} text-crit`}>
+          {sos} active SOS
+        </Link>
+      ) : (
+        <span className="text-sm text-muted">No active SOS</span>
+      )}
+      {health.length > 0 ? (
+        <Link to="/alerts" className={`${link} ${critical ? 'text-crit' : 'text-warn'}`}>
+          {health.length} open {health.length === 1 ? 'alert' : 'alerts'}
+          {critical > 0 && `, ${critical} critical`}
+        </Link>
+      ) : (
+        <span className="text-sm text-muted">No open alerts</span>
+      )}
+    </div>
   );
 }
 
