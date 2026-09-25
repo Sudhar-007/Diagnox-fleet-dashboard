@@ -2,14 +2,11 @@ import { randomUUID } from 'node:crypto';
 
 import { DEFAULT_TANK_CAPACITY_L, fleet as seedFleet } from '../config/fleet.js';
 import { formatTs } from '../engine/time.js';
-import { StorageCorruptError } from './storage.js';
+import { InputError, TRUCK_ID, bad, number, text } from './input.js';
+import { loadOrReseed } from './storage.js';
 
-export class RegistryError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
+// Kept under its old name for the registry routes.
+export const RegistryError = InputError;
 
 export const SERVICE_TYPES = [
   'Oil change',
@@ -22,37 +19,7 @@ export const SERVICE_TYPES = [
   'Other',
 ];
 
-// truck_id is kept exactly as entered: it must match what the device sends.
-const TRUCK_ID = /^[A-Za-z0-9-]{2,16}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const NUMERIC = /^-?\d+(\.\d+)?$/;
-
-const bad = (msg) => {
-  throw new RegistryError(400, msg);
-};
-
-function text(value, field, max, { required = false } = {}) {
-  if (value == null || value === '') {
-    if (required) bad(`${field} is required`);
-    return null;
-  }
-  if (typeof value !== 'string') bad(`${field} must be text`);
-  const v = value.trim();
-  if (required && !v) bad(`${field} is required`);
-  if (v.length > max) bad(`${field} must be at most ${max} characters`);
-  return v || null;
-}
-
-function number(value, field, min, max, { required = false } = {}) {
-  if (value == null || value === '') {
-    if (required) bad(`${field} is required`);
-    return null;
-  }
-  const ok = typeof value === 'number' || (typeof value === 'string' && NUMERIC.test(value.trim()));
-  const n = ok ? Number(value) : NaN;
-  if (!Number.isFinite(n) || n < min || n > max) bad(`${field} must be a number from ${min} to ${max}`);
-  return n;
-}
 
 function date(value, field, nowMs) {
   if (typeof value !== 'string' || !DATE.test(value)) bad(`${field} must be a date like 2026-09-25`);
@@ -71,17 +38,7 @@ const newId = (prefix) => `${prefix}-${randomUUID().slice(0, 8)}`;
 export function createRegistry({ storage, log = console }) {
   const nowTs = () => formatTs(Date.now());
 
-  // An unreadable file has already been moved aside by the storage backend; start that
-  // collection again from the seed and say so loudly. The old data is still on disk.
-  function safeLoad(name) {
-    try {
-      return storage.load(name);
-    } catch (err) {
-      if (!(err instanceof StorageCorruptError)) throw err;
-      log.error(`[registry] ${err.message}. Starting ${name} again from the seed.`);
-      return null;
-    }
-  }
+  const safeLoad = (name) => loadOrReseed(storage, name, log);
 
   let drivers = safeLoad('drivers');
   if (!drivers) {

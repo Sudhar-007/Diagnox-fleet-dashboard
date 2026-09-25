@@ -6,7 +6,35 @@ export function alertText(a) {
   if (a.kind === 'sos') {
     return `${a.name}${a.detail ? ` · ${a.detail}` : ''} · ${a.truck_id} · ${formatClock(a.opened_at)}`;
   }
-  return `${a.name} · ${a.field} ${a.value} ${a.unit} ${a.op} ${a.threshold} ${a.unit} · ${a.truck_id} · ${formatClock(a.opened_at)}`;
+  return `${a.name} · ${ruleReading(a)} · ${a.truck_id} · ${formatClock(a.opened_at)}`;
+}
+
+// "coolant_temp 112 °C > 110 °C", or for a zone "Kodungaiyur dump yard, 120 m from centre < 500 m radius".
+export function ruleReading(a, value = a.value) {
+  if (a.kind === 'geofence' || a.zone_id) {
+    return `${a.zone_name}, ${value} m from centre ${a.op} ${a.threshold} m radius`;
+  }
+  return `${a.field} ${value} ${a.unit} ${a.op} ${a.threshold} ${a.unit}`;
+}
+
+// How a closed alert ended, in words.
+export function resolutionText(a) {
+  switch (a.resolution) {
+    case 'cleared':
+      return a.kind === 'geofence'
+        ? a.zone_type === 'restricted'
+          ? 'Cleared when the truck left the zone'
+          : 'Cleared when the truck came back inside'
+        : 'Cleared on its own';
+    case 'zone_removed':
+      return 'Closed: zone deleted';
+    case 'zone_changed':
+      return 'Closed: zone changed, alerts turned off or truck no longer covered';
+    case 'rule_changed':
+      return 'Closed: threshold changed in Settings';
+    default:
+      return `Resolved by ${a.resolved_by ?? 'hand'}`;
+  }
 }
 
 export function formatPosition(lat, lng) {
@@ -36,7 +64,7 @@ export function byUrgency(a, b) {
 // Events carry the rule as it stood when they happened.
 export function eventDescription(event) {
   const by = event.by ? ` by ${event.by}` : '';
-  const reading = `${event.field} ${event.value} ${event.unit} ${event.op} ${event.threshold} ${event.unit}`;
+  const reading = ruleReading(event);
   if (event.type === 'opened' && event.trigger) {
     return `${event.name}${event.detail ? `: ${event.detail}` : ''}${by ? `, raised${by}` : ''}`;
   }
@@ -50,7 +78,10 @@ export function eventDescription(event) {
     case 'resolved':
       return `Resolved${by}`;
     case 'cleared':
+      if (event.zone_id) return event.zone_type === 'restricted' ? 'Cleared: left the zone' : 'Cleared: back inside the zone';
       return 'Cleared: back within limits';
+    case 'closed':
+      return `Closed: ${event.note ?? 'zone changed'}`;
     default:
       return event.type;
   }

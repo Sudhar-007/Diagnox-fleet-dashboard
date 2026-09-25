@@ -2,7 +2,7 @@ import AlertActions from './AlertActions.jsx';
 import ProvenanceBadge from './ProvenanceBadge.jsx';
 import { Link } from 'react-router-dom';
 
-import { alertText, formatPosition } from '../lib/alerts.js';
+import { alertText, formatPosition, resolutionText } from '../lib/alerts.js';
 import { formatClock, formatDuration } from '../lib/format.js';
 import { useFleetStore } from '../store/useFleetStore.js';
 
@@ -44,6 +44,23 @@ function ConditionNote({ alert, live }) {
   }
 }
 
+function ZoneConditionNote({ alert }) {
+  switch (alert.condition) {
+    case 'firing':
+      return (
+        <span>
+          Now {alert.last_value} m from centre, {alert.zone_type === 'restricted' ? 'still inside' : 'still outside'}
+        </span>
+      );
+    case 'unknown':
+      return <span>No GPS fix right now</span>;
+    case 'no_data':
+      return <span className="text-idle">No data from the truck; stays open until it reports or is resolved</span>;
+    default:
+      return null;
+  }
+}
+
 export default function AlertRow({ alert, actions = true }) {
   const now = useFleetStore((s) => s.now);
   const clockOffsetMs = useFleetStore((s) => s.clockOffsetMs);
@@ -71,15 +88,35 @@ export default function AlertRow({ alert, actions = true }) {
             ) : (
               <span>Open for {formatDuration((alert.resolved_ms - alert.opened_ms) / 1000)}</span>
             )}
-            {alert.peak_value !== alert.value && (
-              <span>
-                Worst {alert.peak_value} {alert.unit}
-              </span>
-            )}
+            {alert.peak_value !== alert.value &&
+              (alert.kind === 'geofence' ? (
+                <span>
+                  {alert.zone_type === 'restricted' ? 'Closest' : 'Farthest'} {alert.peak_value} m from centre
+                </span>
+              ) : (
+                <span>
+                  Worst {alert.peak_value} {alert.unit}
+                </span>
+              ))}
             {open && alert.kind === 'health' && (
               <ConditionNote alert={alert} live={typeof live === 'number' ? live : null} />
             )}
+            {open && alert.kind === 'geofence' && <ZoneConditionNote alert={alert} />}
           </div>
+
+          {alert.kind === 'geofence' && (
+            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted">
+              <span>
+                {alert.zone_type === 'restricted' ? 'Restricted zone' : 'Allowed zone'} {alert.zone_name}
+              </span>
+              <Link
+                to={`/live?truck=${encodeURIComponent(alert.truck_id)}`}
+                className="text-ink underline decoration-line underline-offset-4 hover:decoration-ink"
+              >
+                View on map
+              </Link>
+            </p>
+          )}
 
           {alert.kind === 'sos' && (
             <p className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted">
@@ -104,9 +141,9 @@ export default function AlertRow({ alert, actions = true }) {
           )}
           {alert.resolved_at && (
             <p className="mt-1 text-sm text-muted">
-              {alert.resolution === 'cleared'
-                ? `Cleared automatically at ${alert.resolved_at.slice(11)}`
-                : `Resolved${alert.resolved_by ? ` by ${alert.resolved_by}` : ''} at ${alert.resolved_at.slice(11)}`}
+              {alert.resolution === 'manual'
+                ? `Resolved${alert.resolved_by ? ` by ${alert.resolved_by}` : ''} at ${alert.resolved_at.slice(11)}`
+                : `${resolutionText(alert)} at ${alert.resolved_at.slice(11)}`}
               {alert.resolve_note && <span className="text-ink">: {alert.resolve_note}</span>}
             </p>
           )}

@@ -165,6 +165,11 @@ function Header({ truck, reg, truckId }) {
             <StatusBadge status={status} />
             <ProvenanceBadge kind={truck.provenance} />
             <span className="text-sm text-muted">Last seen {formatAgo(age)}</span>
+            {truck.zones_inside?.length > 0 && (
+              <span className="text-sm text-muted">
+                In {truck.zones_inside.map((z) => z.zone_name).join(', ')}
+              </span>
+            )}
             <TriggerSosButton truckId={truckId} />
           </>
         ) : (

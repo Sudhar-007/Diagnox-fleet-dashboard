@@ -5,7 +5,7 @@ import { parseTs } from '../engine/time.js';
 const OPTIONAL_FIELDS = ['fuel_level', 'sos', 'maintenance_risk_score'];
 
 // Joins the raw store, the fleet registry and engine outputs into what the UI renders.
-export function createFleet({ store, rules, registry }) {
+export function createFleet({ store, rules, registry, zonesInside = () => [] }) {
   function maxSustainS() {
     return Math.max(0, ...rules.health.map((r) => r.sustain_s ?? 0));
   }
@@ -36,6 +36,7 @@ export function createFleet({ store, rules, registry }) {
       model: info.model,
       tank_capacity_l: info.tank_capacity_l,
       in_registry: info.in_registry,
+      zones_inside: zonesInside(truck_id),
       rule_risk_score: risk.score,
       risk_breakdown: risk.breakdown,
       received_at: meta.received_at,

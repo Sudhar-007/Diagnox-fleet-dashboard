@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import FleetMap from '../components/FleetMap.jsx';
 import Plate from '../components/Plate.jsx';
@@ -8,6 +8,26 @@ import { TRAIL_POINTS } from '../config.js';
 import { useFleetStore } from '../store/useFleetStore.js';
 import { useTruckStatus } from '../lib/useTruckStatus.js';
 import { formatAgo, formatNumber } from '../lib/format.js';
+
+function ZoneLegend() {
+  const zones = useFleetStore((s) => s.zones);
+  if (!zones) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden className="size-3 rounded-full border-2 border-crit bg-crit/15" />
+        Restricted zone
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden className="size-3 rounded-full border-[1.5px] border-dashed border-ink" />
+        Allowed zone
+      </span>
+      <Link to="/settings" className="text-ink underline decoration-line underline-offset-4 hover:decoration-ink">
+        {zones.length === 0 ? 'No zones yet, add one' : 'Edit zones'}
+      </Link>
+    </div>
+  );
+}
 
 function TruckRow({ truck, selected, onSelect }) {
   const { age, status } = useTruckStatus(truck);
@@ -50,7 +70,10 @@ export default function LiveMap() {
   return (
     <div className="mx-auto flex max-w-[1600px] flex-col gap-4 lg:h-[calc(100dvh-6.5rem)]">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <h1 className="font-cond text-2xl font-bold">Live Map</h1>
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+          <h1 className="font-cond text-2xl font-bold">Live Map</h1>
+          <ZoneLegend />
+        </div>
         <div className="flex items-center gap-4 text-sm text-muted">
           <span>Trails show each truck's last {TRAIL_POINTS} positions</span>
           <button

@@ -161,3 +161,29 @@
   outline: 2px solid var(--color-crit);
   outline-offset: 2px;
 }
+
+/* Geofence name above the zone's north edge. */
+.zone-label {
+  width: 0 !important;
+  height: 0 !important;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.zone-label span {
+  position: absolute;
+  left: 0;
+  bottom: 3px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: rgb(27 32 39 / 0.8);
+  font: 600 12px/1.4 var(--font-cond);
+  letter-spacing: 0.02em;
+  color: var(--color-ink);
+}
+
+.zone-label--restricted span {
+  color: var(--color-crit);
+}

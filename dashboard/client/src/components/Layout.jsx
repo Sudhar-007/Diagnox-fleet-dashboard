@@ -11,6 +11,7 @@ const NAV = [
   { to: '/alerts', label: 'Alerts & SOS', badge: 'alerts' },
   { to: '/vehicles', label: 'Vehicles' },
   { to: '/maintenance', label: 'Maintenance' },
+  { to: '/settings', label: 'Settings' },
 ];
 
 // Count of alerts nobody has acknowledged yet; red when any of them is critical.

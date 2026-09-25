@@ -15,6 +15,7 @@ const pendingEvents = [];
 let pendingOffsetMs = null;
 
 const EVENT_LIMIT = 500;
+const VISIT_LIMIT = 200;
 const RESOLVED_LIMIT = 1000;
 
 // Every live alert change seen since the current resync started. The REST snapshot may
@@ -71,6 +72,8 @@ function mergeTrail(existing = [], incoming = []) {
   return merged.slice(-TRAIL_POINTS);
 }
 let ticker = null;
+// When thresholds were last applied from /api/rules, so an older snapshot cannot undo them.
+let rulesAppliedAt = 0;
 
 export const useFleetStore = create((set) => ({
   trucks: {},
@@ -87,6 +90,9 @@ export const useFleetStore = create((set) => ({
   // on every change anywhere, so views that fetch related data (service records) refetch.
   registry: null,
   registryVersion: 0,
+  // Geofence zones and recent confirmed entries/exits (newest first).
+  zones: null,
+  zoneVisits: [],
   syncError: null,
   now: Date.now(),
 
@@ -107,7 +113,7 @@ export const useFleetStore = create((set) => ({
       trucks: snapshot,
       trails: {},
       freshnessRules: freshness,
-      healthRules: health_rules,
+      ...(requestedAt >= rulesAppliedAt ? { healthRules: health_rules } : {}),
       clockOffsetMs: server_time - (requestedAt + now) / 2,
       syncError: null,
       now,
@@ -134,6 +140,23 @@ export const useFleetStore = create((set) => ({
   // Pushed every 2 s; small and rare enough to apply directly.
   setPipeline: (pipeline) => set({ pipeline }),
   setRegistry: (registry) => set((s) => ({ registry, registryVersion: s.registryVersion + 1 })),
+  // Visits pushed by the socket while the request was in flight are kept.
+  setZones: ({ zones, visits }) =>
+    set((s) => {
+      const byId = new Map([...visits, ...s.zoneVisits].map((v) => [v.id, v]));
+      return { zones, zoneVisits: [...byId.values()].sort((a, b) => b.at_ms - a.at_ms).slice(0, VISIT_LIMIT) };
+    }),
+  // Visits arrive one at a time and rarely; applied directly, deduped by id.
+  addVisit: (visit) =>
+    set((s) =>
+      s.zoneVisits.some((v) => v.id === visit.id)
+        ? {}
+        : { zoneVisits: [visit, ...s.zoneVisits].sort((a, b) => b.at_ms - a.at_ms).slice(0, VISIT_LIMIT) },
+    ),
+  setHealthRules: (healthRules) => {
+    rulesAppliedAt = Date.now();
+    set({ healthRules });
+  },
   setSyncError: (syncError) => set({ syncError }),
 }));
 

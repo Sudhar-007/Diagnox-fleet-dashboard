@@ -77,6 +77,18 @@ export function createJsonStorage({ dir, persistent = true }) {
   };
 }
 
+// Load a collection; an unreadable one has already been moved aside by the backend, so
+// start it again from the seed (null) and say so loudly. The old data is still on disk.
+export function loadOrReseed(storage, name, log = console) {
+  try {
+    return storage.load(name);
+  } catch (err) {
+    if (!(err instanceof StorageCorruptError)) throw err;
+    log.error(`[storage] ${err.message}. Starting ${name} again from the seed.`);
+    return null;
+  }
+}
+
 // In-memory backend for tests.
 export function createMemoryStorage() {
   const data = new Map();

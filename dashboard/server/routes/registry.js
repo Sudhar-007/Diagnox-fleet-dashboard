@@ -1,21 +1,13 @@
 import { Router } from 'express';
 
-import { RegistryError, SERVICE_TYPES } from '../services/registry.js';
+import { SERVICE_TYPES } from '../services/registry.js';
+import { inputHandler } from './handle.js';
 
 // Fleet manager input: trucks, drivers, service records.
 export function registryRouter({ registry, onChange }) {
   const r = Router();
 
-  const handle = (fn, status = 200) => (req, res) => {
-    try {
-      const out = fn(req);
-      if (req.method !== 'GET') onChange();
-      res.status(status).json(out ?? { ok: true });
-    } catch (err) {
-      if (err instanceof RegistryError) return res.status(err.status).json({ error: err.message });
-      throw err;
-    }
-  };
+  const handle = inputHandler(onChange);
 
   r.get('/registry', handle(() => ({
     trucks: registry.listTrucks(),

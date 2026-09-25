@@ -61,6 +61,32 @@ export const SCENARIOS = {
     },
   },
 
+  // Needs a target: the scenario service passes the nearest restricted zone to build().
+  geofence_breach: {
+    label: 'Geofence breach',
+    default_truck: 'TN05',
+    duration_s: 85,
+    needs: 'restricted_zone',
+    description: 'The truck detours into the nearest restricted zone, stops there for about 25 s, then returns to its route.',
+    build(zone) {
+      return {
+        ...this,
+        description: `The truck detours into ${zone.name}, stops there for about 25 s, then returns to its route.`,
+        // Slows at a normal braking rate (3 km/h per second) so the stop is not read as a collision.
+        speedAt(t, speed) {
+          if (t >= 10 && t < 55) return Math.max(0, speed - 3);
+          return undefined;
+        },
+        apply(t, p) {
+          // 5-30 s head in, 30-55 s parked at the centre, 55-80 s head back
+          const shape = t < 30 ? ramp(t, 5, 30) : t < 55 ? 1 : 1 - ramp(t, 55, 80);
+          p.latitude = round(p.latitude + (zone.center_lat - p.latitude) * shape, 6);
+          p.longitude = round(p.longitude + (zone.center_lng - p.longitude) * shape, 6);
+        },
+      };
+    },
+  },
+
   drop_feed: {
     label: 'Drop feed',
     default_truck: 'TN01',
@@ -77,5 +103,6 @@ export function describeScenarios() {
     description: s.description,
     default_truck: s.default_truck,
     duration_s: s.duration_s,
+    needs: s.needs ?? null,
   }));
 }

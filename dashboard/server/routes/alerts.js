@@ -3,15 +3,19 @@ import { Router } from 'express';
 import { AlertActionError, ALERT_STATUS } from '../services/alerts.js';
 
 const VALID_FILTERS = new Set([...ALERT_STATUS, 'open']);
+const VALID_KINDS = new Set(['health', 'sos', 'geofence']);
 
 export function alertsRouter({ alerts, fleet, onChange }) {
   const r = Router();
 
-  // ?status=ACTIVE|ACKNOWLEDGED|RESOLVED|open  ?truck_id=TN01  ?kind=health|sos
+  // ?status=ACTIVE|ACKNOWLEDGED|RESOLVED|open  ?truck_id=TN01  ?kind=health|sos|geofence
   r.get('/alerts', (req, res) => {
     const { status, truck_id, kind } = req.query;
     if (status && !VALID_FILTERS.has(status)) {
       return res.status(400).json({ error: `status must be one of ${[...VALID_FILTERS].join(', ')}` });
+    }
+    if (kind && !VALID_KINDS.has(kind)) {
+      return res.status(400).json({ error: `kind must be one of ${[...VALID_KINDS].join(', ')}` });
     }
     res.json({ alerts: alerts.list({ status, truck_id, kind }) });
   });

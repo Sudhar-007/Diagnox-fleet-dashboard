@@ -7,6 +7,7 @@ import Alerts from './pages/Alerts.jsx';
 import Vehicles from './pages/Vehicles.jsx';
 import VehicleDetails from './pages/VehicleDetails.jsx';
 import Maintenance from './pages/Maintenance.jsx';
+import Settings from './pages/Settings.jsx';
 import { API_URL, API_URL_PROBLEM } from './config.js';
 import { useSocket } from './hooks/useSocket.js';
 
@@ -44,6 +45,7 @@ function Connected() {
         <Route path="vehicles" element={<Vehicles />} />
         <Route path="vehicles/:truckId" element={<VehicleDetails />} />
         <Route path="maintenance" element={<Maintenance />} />
+        <Route path="settings" element={<Settings />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

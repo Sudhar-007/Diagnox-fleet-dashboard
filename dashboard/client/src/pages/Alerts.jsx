@@ -5,7 +5,7 @@ import AlertRow from '../components/AlertRow.jsx';
 import Plate from '../components/Plate.jsx';
 import Tabs, { TabPanel } from '../components/ui/Tabs.jsx';
 import Panel, { EmptyState } from '../components/ui/Panel.jsx';
-import { byUrgency, eventDescription, isOpen } from '../lib/alerts.js';
+import { byUrgency, eventDescription, isOpen, resolutionText, ruleReading } from '../lib/alerts.js';
 import { formatDuration } from '../lib/format.js';
 import { useFleetStore } from '../store/useFleetStore.js';
 
@@ -43,7 +43,7 @@ function ActiveTab({ alerts }) {
       {shown.length === 0 ? (
         <EmptyState>
           {alerts.length === 0
-            ? 'No open alerts or SOS. Every truck is within its health thresholds.'
+            ? 'No open alerts or SOS. Every truck is within its health thresholds and zones.'
             : `No ${level} alerts open.`}
         </EmptyState>
       ) : (
@@ -146,9 +146,7 @@ function ResponseHistoryTab({ resolved }) {
                     <span className={a.level === 'critical' ? 'text-crit' : 'text-warn'}>{a.name}</span>
                   </div>
                   <div className="mt-0.5 text-muted">
-                    {a.kind === 'sos'
-                      ? a.detail ?? 'SOS'
-                      : `${a.field} ${a.value} ${a.unit} ${a.op} ${a.threshold} ${a.unit}`}
+                    {a.kind === 'sos' ? a.detail ?? 'SOS' : ruleReading(a)}
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-2 text-muted">{a.opened_at.slice(11)}</td>
@@ -167,7 +165,7 @@ function ResponseHistoryTab({ resolved }) {
                   <span className="text-muted"> after opening</span>
                 </td>
                 <td className="px-4 py-2 text-muted">
-                  {a.resolution === 'cleared' ? 'Cleared on its own' : `Resolved by ${a.resolved_by ?? 'hand'}`}
+                  {resolutionText(a)}
                   {a.resolve_note && <div className="text-ink">{a.resolve_note}</div>}
                 </td>
               </tr>
@@ -198,7 +196,9 @@ export default function Alerts() {
     <div className="mx-auto max-w-[1200px]">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <h1 className="font-cond text-2xl font-bold">Alerts &amp; SOS</h1>
-        <p className="text-sm text-muted">Health rules are demo-tuned thresholds, not validated limits.</p>
+        <p className="text-sm text-muted">
+          Health rules are demo-tuned thresholds, not validated limits. Change them in Settings.
+        </p>
       </div>
 
       <div className="mt-4">

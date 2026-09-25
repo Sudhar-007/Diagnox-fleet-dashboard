@@ -6,28 +6,47 @@ import { Server } from 'socket.io';
 import { createStore } from './services/store.js';
 import { createFleet } from './services/fleet.js';
 import { createRegistry } from './services/registry.js';
+import { createGeofences } from './services/geofences.js';
+import { createRuleSettings } from './services/ruleSettings.js';
 import { createMemoryStorage } from './services/storage.js';
 import { createAlertService } from './services/alerts.js';
 import { createScenarioService } from './services/scenarios.js';
 import { computePipeline } from './services/pipeline.js';
 import { originChecker } from './services/cors.js';
 import { parseTs } from './engine/time.js';
+import { appliesTo, distanceM, hasFix } from './engine/geofence.js';
 import { trucksRouter } from './routes/trucks.js';
 import { healthRouter } from './routes/health.js';
 import { alertsRouter } from './routes/alerts.js';
 import { demoRouter } from './routes/demo.js';
 import { registryRouter } from './routes/registry.js';
+import { settingsRouter } from './routes/settings.js';
 
 // Wires store, engines, REST and Socket.IO around a telemetry source.
 // `makeSource(onPoints)` must return { start, stop, mode, requestedMode } and, when it runs
 // the simulator, `sim` (used by demo scenarios).
-export function createServer({ rules, allowedOrigins, makeSource, storage = createMemoryStorage(), demoEnabled = true, log = console }) {
+export function createServer({
+  rules: baseRules,
+  allowedOrigins,
+  makeSource,
+  storage = createMemoryStorage(),
+  demoEnabled = true,
+  log = console,
+}) {
+  // Thresholds are edited at runtime (Settings), so each server works on its own copy.
+  const rules = structuredClone(baseRules);
   const checkOrigin = originChecker(allowedOrigins);
   const startedAt = Date.now();
   const store = createStore({ capacity: 5000, maxFutureS: rules.ingest.max_future_s });
   const registry = createRegistry({ storage, log });
-  const fleet = createFleet({ store, rules, registry });
-  const alerts = createAlertService({ rules });
+  const geofences = createGeofences({ storage, log });
+  const ruleSettings = createRuleSettings({ rules, storage, log });
+  const alerts = createAlertService({
+    rules,
+    zones: geofences.list,
+    onVisit: (visit) => io.emit('zone:visit', visit),
+  });
+  const fleet = createFleet({ store, rules, registry, zonesInside: alerts.zonesInside });
 
   const app = express();
   const server = http.createServer(app);
@@ -52,7 +71,6 @@ export function createServer({ rules, allowedOrigins, makeSource, storage = crea
     // One truck failing must not stop the others in the same batch.
     for (const payload of payloads) {
       try {
-        io.emit('truck:update', { ...payload, server_time: nowMs });
         const tMs = parseTs(payload.timestamp);
         // Recent prior points for the collision heuristic.
         const recent = store.history(payload.truck_id, {
@@ -63,10 +81,27 @@ export function createServer({ rules, allowedOrigins, makeSource, storage = crea
       } catch (err) {
         log.error(`[bff] alert evaluation failed for ${payload.truck_id}:`, err.message);
       }
+      // The live position goes out even if evaluation failed. Zone membership is as confirmed
+      // by this very point, so it is read after evaluation.
+      let zones_inside = [];
+      try {
+        zones_inside = alerts.zonesInside(payload.truck_id);
+      } catch (err) {
+        log.error(`[bff] zone lookup failed for ${payload.truck_id}:`, err.message);
+      }
+      io.emit('truck:update', { ...payload, zones_inside, server_time: nowMs });
     }
   });
 
-  const scenarios = createScenarioService({ sim: source.sim ?? null, enabled: demoEnabled });
+  // Geofence breach demo: the nearest restricted zone that covers the truck, preferring
+  // zones that raise alerts.
+  const restrictedZoneFor = (truck_id) => {
+    const p = store.latest(truck_id);
+    const dist = (z) => (p && hasFix(p) ? distanceM(z, p.latitude, p.longitude) : 0);
+    const candidates = geofences.list().filter((z) => z.type === 'restricted' && appliesTo(z, truck_id));
+    return candidates.sort((a, b) => Number(b.alert) - Number(a.alert) || dist(a) - dist(b))[0] ?? null;
+  };
+  const scenarios = createScenarioService({ sim: source.sim ?? null, enabled: demoEnabled, restrictedZoneFor });
   const pipeline = () =>
     computePipeline({ mode: source.mode(), trucks: fleet.snapshot(), nowMs: Date.now(), startedAt });
 
@@ -91,6 +126,22 @@ export function createServer({ rules, allowedOrigins, makeSource, storage = crea
   app.use('/api', alertsRouter({ alerts, fleet, onChange: emitAlertChange }));
   app.use('/api', demoRouter({ scenarios }));
   app.use('/api', registryRouter({ registry, onChange: () => io.emit('registry:update') }));
+  app.use(
+    '/api',
+    settingsRouter({
+      geofences,
+      ruleSettings,
+      alerts,
+      onZonesChange: () => {
+        io.emit('geofences:update');
+        for (const change of alerts.syncZones()) emitAlertChange(change);
+      },
+      onRulesChange: (out) => {
+        io.emit('rules:update');
+        for (const change of alerts.rulesChanged(new Set(out?.changed_fields ?? []))) emitAlertChange(change);
+      },
+    }),
+  );
   app.use('/api', (req, res) => res.status(404).json({ error: 'not found' }));
   // Malformed JSON bodies and other request errors: answer with JSON, not an HTML stack.
   app.use((err, req, res, next) => {
@@ -110,6 +161,9 @@ export function createServer({ rules, allowedOrigins, makeSource, storage = crea
     scenarios,
     pipeline,
     registry,
+    geofences,
+    ruleSettings,
+    rules,
     runSweep,
     listen(port) {
       source.start();

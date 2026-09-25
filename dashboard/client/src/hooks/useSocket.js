@@ -45,6 +45,29 @@ export async function reloadRegistry() {
   }
 }
 
+// Zones and thresholds change only from Settings; reload them whole, newest request wins.
+let zonesRequest = 0;
+export async function reloadZones() {
+  const mine = ++zonesRequest;
+  try {
+    const body = await getJson('/api/geofences');
+    if (mine === zonesRequest) useFleetStore.getState().setZones(body);
+  } catch {
+    // keep the last copy; the next reconnect or change retries
+  }
+}
+
+let rulesRequest = 0;
+export async function reloadRules() {
+  const mine = ++rulesRequest;
+  try {
+    const body = await getJson('/api/rules');
+    if (mine === rulesRequest) useFleetStore.getState().setHealthRules(body.health);
+  } catch {
+    // keep the last copy
+  }
+}
+
 // Fetches the full snapshot, retrying with backoff until it succeeds or a newer
 // resync supersedes it. Returns a cancel function.
 function startResync() {
@@ -57,6 +80,7 @@ function startResync() {
     const requestedAt = Date.now();
     try {
       reloadRegistry();
+      reloadZones();
       // The pipeline strip is optional: its failure must not block trucks and alerts.
       getJson('/api/health')
         .then((health) => !cancelled && useFleetStore.getState().setPipeline(health.pipeline ?? null))
@@ -107,6 +131,9 @@ export function useSocket() {
     socket.on('alert:update', queueAlertChange);
     socket.on('pipeline:status', (p) => useFleetStore.getState().setPipeline(p));
     socket.on('registry:update', reloadRegistry);
+    socket.on('geofences:update', reloadZones);
+    socket.on('zone:visit', (v) => useFleetStore.getState().addVisit(v));
+    socket.on('rules:update', reloadRules);
 
     return () => {
       cancelResync();

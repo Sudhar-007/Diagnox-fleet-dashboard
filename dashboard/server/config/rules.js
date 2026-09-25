@@ -26,6 +26,22 @@ export const rules = {
     weights: { coolant_temp: 30, oil_temp: 20, battery_voltage: 20, engine_load: 15, rpm: 10, speed: 5 },
   },
 
+  geofence: {
+    // Consecutive points on the same side of a zone edge needed to confirm an entry or exit,
+    // so GPS jitter near the edge does not flap.
+    confirm_points: 2,
+  },
+
+  // Bounds for thresholds edited in Settings. Input sanity limits only, not engineering limits.
+  threshold_limits: {
+    coolant_temp: [40, 150],
+    oil_temp: [40, 170],
+    battery_voltage: [9, 18],
+    engine_load: [10, 100],
+    rpm: [500, 6000],
+    speed: [10, 150],
+  },
+
   ingest: {
     // Points stamped this far ahead of the BFF clock are dropped (device clock not set yet).
     max_future_s: 300,
@@ -83,7 +99,7 @@ export const rules = {
       only_when_running: true,
       sustain_s: 10,
       max_gap_s: 5,
-      description: 'Charging system not keeping up while engine runs (held 10 s, so a cranking dip is ignored).',
+      description: 'Charging system not keeping up while the engine runs (held 10 s, so a cranking dip is ignored).',
     },
     {
       id: 'battery_high_critical',
@@ -96,7 +112,7 @@ export const rules = {
       only_when_running: true,
       sustain_s: 10,
       max_gap_s: 5,
-      description: 'Overcharging for 10 s; likely regulator fault.',
+      description: 'Overcharging for 10 s while the engine runs; likely regulator fault.',
     },
     {
       id: 'battery_low_warning',
@@ -109,7 +125,7 @@ export const rules = {
       only_when_running: true,
       sustain_s: 10,
       max_gap_s: 5,
-      description: 'Below normal charging range (13.2 to 14.8 V) for 10 s while engine runs.',
+      description: 'Below the normal charging range for 10 s while the engine runs.',
     },
     {
       id: 'battery_high_warning',
@@ -122,7 +138,7 @@ export const rules = {
       only_when_running: true,
       sustain_s: 10,
       max_gap_s: 5,
-      description: 'Above normal charging range (13.2 to 14.8 V) for 10 s while engine runs.',
+      description: 'Above the normal charging range for 10 s while the engine runs.',
     },
     {
       id: 'engine_load_sustained',

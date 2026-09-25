@@ -7,16 +7,12 @@ import Plate from './Plate.jsx';
 import StatusBadge from './StatusBadge.jsx';
 import ProvenanceBadge from './ProvenanceBadge.jsx';
 import TriggerSosButton from './TriggerSosButton.jsx';
+import ZoneLayer from './ZoneLayer.jsx';
 import { useFleetStore } from '../store/useFleetStore.js';
 import { useTruckStatus } from '../lib/useTruckStatus.js';
 import { formatAgo, formatNumber } from '../lib/format.js';
 import { isValidPosition } from '../lib/position.js';
-
-const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-// Initial view before the first trucks report (central Chennai).
-const DEFAULT_CENTER = [13.05, 80.24];
-const DEFAULT_ZOOM = 11;
+import { ATTRIBUTION, DEFAULT_CENTER, DEFAULT_ZOOM, TILE_URL } from '../lib/mapTiles.js';
 
 const TRAIL_TOKEN = {
   normal: '--color-ok',
@@ -167,6 +163,10 @@ function TruckLayer({ truck, trail, selected, onSelect, compact }) {
                 <dd className="text-ink">{truck.timestamp?.replace('T', ' ')}</dd>
                 <dt className="text-muted">Last seen</dt>
                 <dd className="text-ink">{formatAgo(age)}</dd>
+                <dt className="text-muted">Zone</dt>
+                <dd className="text-ink">
+                  {truck.zones_inside?.length ? truck.zones_inside.map((z) => z.zone_name).join(', ') : 'None'}
+                </dd>
               </dl>
               <div className="flex items-center justify-between gap-2">
                 <ProvenanceBadge kind={truck.provenance} />
@@ -187,6 +187,7 @@ function TruckLayer({ truck, trail, selected, onSelect, compact }) {
 
 export default function FleetMap({ trucks, selectedId = null, onSelect, fitSignal = 0, compact = false }) {
   const trails = useFleetStore((s) => s.trails);
+  const zones = useFleetStore((s) => s.zones);
   const placed = trucks.filter(hasPosition);
   const positions = placed.map((t) => [t.latitude, t.longitude]);
   // Auto-fit reacts to the set of trucks changing, not to every position update.
@@ -206,6 +207,7 @@ export default function FleetMap({ trucks, selectedId = null, onSelect, fitSigna
       <PlainAttributionPrefix />
       <FitToTrucks positions={positions} truckKey={truckKey} fitSignal={fitSignal} />
       {!compact && <FlyToSelected truck={selected} />}
+      {zones && <ZoneLayer zones={zones} compact={compact} />}
       {placed.map((t) => (
         <TruckLayer
           key={t.truck_id}
