@@ -5,6 +5,8 @@ import { Server } from 'socket.io';
 
 import { createStore } from './services/store.js';
 import { createFleet } from './services/fleet.js';
+import { createRegistry } from './services/registry.js';
+import { createMemoryStorage } from './services/storage.js';
 import { createAlertService } from './services/alerts.js';
 import { createScenarioService } from './services/scenarios.js';
 import { computePipeline } from './services/pipeline.js';
@@ -14,15 +16,17 @@ import { trucksRouter } from './routes/trucks.js';
 import { healthRouter } from './routes/health.js';
 import { alertsRouter } from './routes/alerts.js';
 import { demoRouter } from './routes/demo.js';
+import { registryRouter } from './routes/registry.js';
 
 // Wires store, engines, REST and Socket.IO around a telemetry source.
 // `makeSource(onPoints)` must return { start, stop, mode, requestedMode } and, when it runs
 // the simulator, `sim` (used by demo scenarios).
-export function createServer({ rules, allowedOrigins, makeSource, demoEnabled = true, log = console }) {
+export function createServer({ rules, allowedOrigins, makeSource, storage = createMemoryStorage(), demoEnabled = true, log = console }) {
   const checkOrigin = originChecker(allowedOrigins);
   const startedAt = Date.now();
   const store = createStore({ capacity: 5000, maxFutureS: rules.ingest.max_future_s });
-  const fleet = createFleet({ store, rules });
+  const registry = createRegistry({ storage, log });
+  const fleet = createFleet({ store, rules, registry });
   const alerts = createAlertService({ rules });
 
   const app = express();
@@ -86,6 +90,7 @@ export function createServer({ rules, allowedOrigins, makeSource, demoEnabled = 
   app.use('/api', trucksRouter({ fleet, store, rules }));
   app.use('/api', alertsRouter({ alerts, fleet, onChange: emitAlertChange }));
   app.use('/api', demoRouter({ scenarios }));
+  app.use('/api', registryRouter({ registry, onChange: () => io.emit('registry:update') }));
   app.use('/api', (req, res) => res.status(404).json({ error: 'not found' }));
   // Malformed JSON bodies and other request errors: answer with JSON, not an HTML stack.
   app.use((err, req, res, next) => {
@@ -104,6 +109,7 @@ export function createServer({ rules, allowedOrigins, makeSource, demoEnabled = 
     fleet,
     scenarios,
     pipeline,
+    registry,
     runSweep,
     listen(port) {
       source.start();

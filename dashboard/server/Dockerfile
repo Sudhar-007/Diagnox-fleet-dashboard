@@ -11,6 +11,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY . .
 
+# Manager-entered data (JSON backend). Writable by the non-root user.
+RUN mkdir -p /app/data && chown node:node /app/data
+
 USER node
 
 EXPOSE 4000

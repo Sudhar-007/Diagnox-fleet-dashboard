@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -167,7 +168,12 @@ function TruckLayer({ truck, trail, selected, onSelect, compact }) {
                 <dt className="text-muted">Last seen</dt>
                 <dd className="text-ink">{formatAgo(age)}</dd>
               </dl>
-              <ProvenanceBadge kind={truck.provenance} />
+              <div className="flex items-center justify-between gap-2">
+                <ProvenanceBadge kind={truck.provenance} />
+                <Link to={`/vehicles/${encodeURIComponent(truck.truck_id)}`} className="text-sm text-ink underline underline-offset-4">
+                  Open vehicle
+                </Link>
+              </div>
               <div className="border-t border-line pt-2">
                 <TriggerSosButton truckId={truck.truck_id} />
               </div>

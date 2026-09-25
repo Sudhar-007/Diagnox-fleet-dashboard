@@ -83,6 +83,10 @@ export const useFleetStore = create((set) => ({
   clockOffsetMs: 0,
   connection: 'connecting',
   pipeline: null,
+  // Fleet manager data: { trucks, drivers, service_types, storage }. registryVersion bumps
+  // on every change anywhere, so views that fetch related data (service records) refetch.
+  registry: null,
+  registryVersion: 0,
   syncError: null,
   now: Date.now(),
 
@@ -129,6 +133,7 @@ export const useFleetStore = create((set) => ({
   setConnection: (connection) => set({ connection }),
   // Pushed every 2 s; small and rare enough to apply directly.
   setPipeline: (pipeline) => set({ pipeline }),
+  setRegistry: (registry) => set((s) => ({ registry, registryVersion: s.registryVersion + 1 })),
   setSyncError: (syncError) => set({ syncError }),
 }));
 

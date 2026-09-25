@@ -34,3 +34,19 @@ export function rememberName(name) {
     // storage unavailable (private mode): nothing to remember
   }
 }
+
+// A signal that aborts after the request timeout or when `parent` aborts.
+// (AbortSignal.any is too new for some browsers.) Call done() when finished.
+export function timeoutSignal(parent) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new DOMException('Timed out', 'TimeoutError')), REQUEST_TIMEOUT_MS);
+  const onParent = () => ctrl.abort(parent.reason);
+  parent?.addEventListener('abort', onParent, { once: true });
+  return {
+    signal: ctrl.signal,
+    done() {
+      clearTimeout(timer);
+      parent?.removeEventListener('abort', onParent);
+    },
+  };
+}

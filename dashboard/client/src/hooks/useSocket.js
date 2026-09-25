@@ -32,6 +32,19 @@ async function getJson(path) {
   return res.json();
 }
 
+// Fleet manager data changes rarely; reload it whole. When reloads overlap (a form save
+// plus the broadcast it causes, or edits from two tabs), only the newest request applies.
+let registryRequest = 0;
+export async function reloadRegistry() {
+  const mine = ++registryRequest;
+  try {
+    const body = await getJson('/api/registry');
+    if (mine === registryRequest) useFleetStore.getState().setRegistry(body);
+  } catch {
+    // keep the last copy; the next reconnect or change retries
+  }
+}
+
 // Fetches the full snapshot, retrying with backoff until it succeeds or a newer
 // resync supersedes it. Returns a cancel function.
 function startResync() {
@@ -43,6 +56,7 @@ function startResync() {
     const { applySnapshot, setSyncError } = useFleetStore.getState();
     const requestedAt = Date.now();
     try {
+      reloadRegistry();
       // The pipeline strip is optional: its failure must not block trucks and alerts.
       getJson('/api/health')
         .then((health) => !cancelled && useFleetStore.getState().setPipeline(health.pipeline ?? null))
@@ -92,6 +106,7 @@ export function useSocket() {
     socket.on('alert:new', queueAlertChange);
     socket.on('alert:update', queueAlertChange);
     socket.on('pipeline:status', (p) => useFleetStore.getState().setPipeline(p));
+    socket.on('registry:update', reloadRegistry);
 
     return () => {
       cancelResync();

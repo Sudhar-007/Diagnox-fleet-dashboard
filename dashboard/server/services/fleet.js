@@ -1,11 +1,11 @@
-import { fleetEntry } from '../config/fleet.js';
 import { evaluateHealth, freshnessOf } from '../engine/health.js';
+import { riskScore } from '../engine/risk.js';
 import { parseTs } from '../engine/time.js';
 
 const OPTIONAL_FIELDS = ['fuel_level', 'sos', 'maintenance_risk_score'];
 
-// Joins the raw store with engine outputs to produce what the UI renders.
-export function createFleet({ store, rules }) {
+// Joins the raw store, the fleet registry and engine outputs into what the UI renders.
+export function createFleet({ store, rules, registry }) {
   function maxSustainS() {
     return Math.max(0, ...rules.health.map((r) => r.sustain_s ?? 0));
   }
@@ -20,7 +20,8 @@ export function createFleet({ store, rules }) {
     const health = evaluateHealth(latest, history, rules.health);
     const last_seen_s = Math.max(0, (nowMs - meta.received_at) / 1000);
     const freshness = freshnessOf(last_seen_s, rules.freshness);
-    const driver = fleetEntry(truck_id);
+    const info = registry.truckInfo(truck_id);
+    const risk = riskScore(store.history(truck_id, { fromMs: t - rules.risk.window_s * 1000, toMs: t }), rules.health, rules.risk);
 
     return {
       ...latest,
@@ -29,8 +30,14 @@ export function createFleet({ store, rules }) {
       findings: health.findings,
       freshness,
       provenance: meta.provenance,
-      driver_id: driver.driver_id,
-      driver_name: driver.driver_name,
+      driver_id: info.driver_id,
+      driver_name: info.driver_name,
+      registration: info.registration,
+      model: info.model,
+      tank_capacity_l: info.tank_capacity_l,
+      in_registry: info.in_registry,
+      rule_risk_score: risk.score,
+      risk_breakdown: risk.breakdown,
       received_at: meta.received_at,
       last_seen_s: Math.round(last_seen_s),
       optional_fields: OPTIONAL_FIELDS.filter((f) => latest[f] !== undefined),

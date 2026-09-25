@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 import Plate from './Plate.jsx';
 import StatusBadge from './StatusBadge.jsx';
 import ProvenanceBadge from './ProvenanceBadge.jsx';
@@ -37,7 +39,11 @@ export default function TruckCard({ truck }) {
   );
 
   return (
-    <article className={`rounded-md border bg-panel p-4 ${sos ? 'border-crit' : 'border-line'}`}>
+    <Link
+      to={`/vehicles/${encodeURIComponent(truck.truck_id)}`}
+      aria-label={`Open ${truck.truck_id}, ${truck.driver_name}`}
+      className={`block rounded-md border bg-panel p-4 hover:bg-panel-hi/40 ${sos ? 'border-crit' : 'border-line'}`}
+    >
       {sos && (
         <p className="mb-3 flex items-center gap-2 text-sm font-medium text-crit">
           <span className="rounded-[2px] bg-crit px-1.5 font-cond font-bold text-white">SOS</span>
@@ -77,6 +83,6 @@ export default function TruckCard({ truck }) {
           ))}
         </ul>
       )}
-    </article>
+    </Link>
   );
 }

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import Button from './ui/Button.jsx';
-import { API_URL, REQUEST_TIMEOUT_MS } from '../config.js';
-import { sendJson } from '../lib/api.js';
+import { API_URL } from '../config.js';
+import { sendJson, timeoutSignal } from '../lib/api.js';
 import { useFleetStore } from '../store/useFleetStore.js';
 
 const OPEN_KEY = 'fleet.demoPanel';
@@ -96,10 +96,9 @@ export default function ScenarioPanel() {
     const ctrl = new AbortController();
     inFlight.current = ctrl;
     const sentAt = Date.now();
+    const t = timeoutSignal(ctrl.signal);
     try {
-      const res = await fetch(`${API_URL}/api/demo/scenarios`, {
-        signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
-      });
+      const res = await fetch(`${API_URL}/api/demo/scenarios`, { signal: t.signal });
       if (!res.ok) throw new Error(`The server answered ${res.status}`);
       const body = await res.json();
       if (sentAt >= lastStart.current) setData(body);
@@ -108,6 +107,7 @@ export default function ScenarioPanel() {
       if (err.name === 'AbortError') return;
       setError(err.name === 'TimeoutError' ? 'The server did not respond in time.' : err.message);
     } finally {
+      t.done();
       if (inFlight.current === ctrl) inFlight.current = null;
     }
   }, []);

@@ -7,7 +7,7 @@ Dashboard (React client on Vercel + Express BFF in Docker). Each step must leave
 - [x] 3. Live Map: markers, trails, OSM tiles, dashboard mini-map
 - [x] 4. Health rules + alert engine + Alerts page (acknowledge / resolve with notes)
 - [x] 5. SOS lifecycle + global SOS banner + Scenario panel + Pipeline strip
-- [ ] 6. Vehicle list + Vehicle Details tabs (Health, Maintenance risk breakdown) + Maintenance board
+- [x] 6. Vehicle list + Vehicle Details tabs (Health, Maintenance risk breakdown) + Maintenance board
 - [ ] 7. Geofencing: engine + map overlay + Settings (Geofences, Alert Thresholds)
 - [ ] 8. Trips derivation + Trips page + Replay
 - [ ] 9. Driver behaviour events + scores + Drivers page

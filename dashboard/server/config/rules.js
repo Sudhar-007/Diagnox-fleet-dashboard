@@ -16,6 +16,16 @@ export const rules = {
     collision: { from_kmh: 40, to_kmh: 5, within_s: 3 },
   },
 
+  risk: {
+    // Rule-based maintenance risk looks back over this window.
+    window_s: 600,
+    // Exposure is measured against at least this much judged time, so a few seconds
+    // right after an engine start (e.g. a cranking dip) cannot count as "all the time".
+    min_judged_s: 60,
+    // Most points each field can add to the 0-100 score (they sum to 100).
+    weights: { coolant_temp: 30, oil_temp: 20, battery_voltage: 20, engine_load: 15, rpm: 10, speed: 5 },
+  },
+
   ingest: {
     // Points stamped this far ahead of the BFF clock are dropped (device clock not set yet).
     max_future_s: 300,

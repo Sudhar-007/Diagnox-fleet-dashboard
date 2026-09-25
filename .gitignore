@@ -22,3 +22,6 @@ Thumbs.db
 
 # hosting CLI link state
 .vercel/
+
+# local data written by the fleet server
+dashboard/server/data/
