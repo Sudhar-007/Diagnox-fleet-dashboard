@@ -3,7 +3,7 @@
 Dashboard (React client on Vercel + Express BFF in Docker). Each step must leave a working demo. Redeploy after every step.
 
 - [x] 1. Simulator + BFF + Socket.IO + Dashboard grid updating live (local, DATA_SOURCE=mock)
-- [ ] 2. Deploy skeleton: server Dockerfile + docker-compose, client vercel.json; verify Vercel URL gets live updates over WSS
+- [x] 2. Deploy skeleton: server Dockerfile + docker-compose, client vercel.json; verify Vercel URL gets live updates over WSS
 - [ ] 3. Live Map: markers, trails, OSM tiles, dashboard mini-map
 - [ ] 4. Health rules + alert engine + global banner + Alerts page
 - [ ] 5. SOS lifecycle + Scenario panel + Pipeline strip

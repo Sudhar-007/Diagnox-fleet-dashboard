@@ -19,3 +19,6 @@ venv/
 *.log
 .DS_Store
 Thumbs.db
+
+# hosting CLI link state
+.vercel/
