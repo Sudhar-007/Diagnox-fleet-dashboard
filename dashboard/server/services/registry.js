@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { DEFAULT_TANK_CAPACITY_L, fleet as seedFleet } from '../config/fleet.js';
-import { formatTs } from '../engine/time.js';
+import { formatTs, parseTs } from '../engine/time.js';
 import { InputError, TRUCK_ID, bad, number, text } from './input.js';
 import { loadOrReseed } from './storage.js';
 
@@ -27,6 +27,19 @@ function date(value, field, nowMs) {
   if (Number.isNaN(ms) || formatTs(ms).slice(0, 10) !== value) bad(`${field} is not a real date`);
   if (ms > nowMs) bad(`${field} cannot be in the future`);
   return value;
+}
+
+const DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
+const YEAR_MS = 365 * 24 * 3600 * 1000;
+
+// A local date and time like 2026-09-25T14:30, stored as a contract timestamp (seconds 00).
+function datetime(value, field, nowMs) {
+  if (typeof value !== 'string' || !DATETIME.test(value)) bad(`${field} must be a date and time like 2026-09-25T14:30`);
+  const ts = `${value.slice(0, 16)}:00`;
+  const ms = parseTs(ts);
+  if (ms == null || formatTs(ms) !== ts) bad(`${field} is not a real date and time`);
+  if (Math.abs(ms - nowMs) > YEAR_MS) bad(`${field} must be within a year of today`);
+  return ts;
 }
 
 const newId = (prefix) => `${prefix}-${randomUUID().slice(0, 8)}`;
@@ -66,6 +79,7 @@ export function createRegistry({ storage, log = console }) {
     storage.save('trucks', trucks);
   }
   let services = safeLoad('service_records') ?? [];
+  let assignments = safeLoad('trip_assignments') ?? [];
 
   const commit = {
     trucks(next) {
@@ -79,6 +93,10 @@ export function createRegistry({ storage, log = console }) {
     services(next) {
       storage.save('service_records', next);
       services = next;
+    },
+    assignments(next) {
+      storage.save('trip_assignments', next);
+      assignments = next;
     },
   };
 
@@ -183,6 +201,42 @@ export function createRegistry({ storage, log = console }) {
       const record = { id: newId('S'), ...fields, created_at: formatTs(nowMs) };
       commit.services([...services, record]);
       return record;
+    },
+
+    // Planned jobs, soonest first. Matched to detected trips by the dashboard (rules.trips).
+    listAssignments({ truck_id } = {}) {
+      const out = truck_id ? assignments.filter((a) => a.truck_id === truck_id) : assignments;
+      return [...out]
+        .map((a) => ({ ...a, driver_name: findDriver(a.driver_id)?.name ?? null }))
+        .sort((a, b) => a.planned_start.localeCompare(b.planned_start) || a.created_at.localeCompare(b.created_at));
+    },
+
+    // driver_id left out means the truck's current driver.
+    addAssignment(body = {}, nowMs = Date.now()) {
+      const truck_id = typeof body.truck_id === 'string' ? body.truck_id.trim() : '';
+      const truck = findTruck(truck_id);
+      if (!truck) bad(`unknown truck ${truck_id}`.trim());
+      let driver_id = body.driver_id ?? truck.driver_id ?? null;
+      if (driver_id === '') driver_id = null;
+      if (driver_id != null && !findDriver(driver_id)) bad(`unknown driver ${driver_id}`);
+      const fields = {
+        truck_id,
+        driver_id,
+        from_place: text(body.from_place, 'from_place', 60, { required: true }),
+        to_place: text(body.to_place, 'to_place', 60, { required: true }),
+        cargo: text(body.cargo, 'cargo', 100),
+        planned_start: datetime(body.planned_start, 'planned_start', nowMs),
+        notes: text(body.notes, 'notes', 300),
+        by: text(body.by, 'by', 60),
+      };
+      const record = { id: newId('P'), ...fields, created_at: formatTs(nowMs) };
+      commit.assignments([...assignments, record]);
+      return { ...record, driver_name: findDriver(driver_id)?.name ?? null };
+    },
+
+    removeAssignment(id) {
+      if (!assignments.some((a) => a.id === id)) throw new RegistryError(404, `unknown trip assignment ${id}`);
+      commit.assignments(assignments.filter((a) => a.id !== id));
     },
 
     removeServiceRecord(id) {

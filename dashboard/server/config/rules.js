@@ -32,6 +32,22 @@ export const rules = {
     confirm_points: 2,
   },
 
+  trips: {
+    // A trip starts when speed stays above start_speed_kmh for start_hold_s (it begins at the
+    // first of those readings) and ends when speed stays at 0 for longer than stop_hold_s, or
+    // when no reading arrives for no_data_end_s.
+    start_speed_kmh: 5,
+    start_hold_s: 30,
+    stop_hold_s: 120,
+    no_data_end_s: 300,
+    // "Stopped" means speed at or below this. The spec says exactly 0; if speed comes from GPS,
+    // a parked truck may read a little above 0 (confirm with the hardware team before changing).
+    stop_speed_kmh: 0,
+    // A planned trip assignment is linked to the truck's first detected trip that starts no
+    // earlier than this long before the planned start.
+    assignment_early_s: 1800,
+  },
+
   // Bounds for thresholds edited in Settings. Input sanity limits only, not engineering limits.
   threshold_limits: {
     coolant_temp: [40, 150],

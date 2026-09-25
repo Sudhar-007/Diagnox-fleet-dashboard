@@ -47,12 +47,20 @@ export function createFleet({ store, rules, registry, zonesInside = () => [] }) 
 
   return {
     // Returns derived payloads only for points that were new (not duplicates).
-    ingest(points, provenance, nowMs = Date.now()) {
+    // `onAccepted(point)` is called for every point the store kept.
+    ingest(points, provenance, nowMs = Date.now(), onAccepted = () => {}) {
       const updated = new Set();
       for (const p of points) {
-        if (store.ingest(p, { provenance, receivedAt: nowMs })) updated.add(p.truck_id);
+        if (store.ingest(p, { provenance, receivedAt: nowMs })) {
+          updated.add(p.truck_id);
+          onAccepted(p);
+        }
       }
       return [...updated].map((id) => derive(id, nowMs)).filter(Boolean);
+    },
+    // History only (warm start): stored, nothing derived or evaluated.
+    backfill(points, provenance, nowMs = Date.now(), onAccepted = () => {}) {
+      for (const p of points) if (store.ingest(p, { provenance, receivedAt: nowMs })) onAccepted(p);
     },
     snapshot(nowMs = Date.now()) {
       return store.truckIds().map((id) => derive(id, nowMs)).filter(Boolean);

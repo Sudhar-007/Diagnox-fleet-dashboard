@@ -5,6 +5,7 @@ import { API_URL, REQUEST_TIMEOUT_MS, TRAIL_POINTS } from '../config.js';
 import {
   useFleetStore,
   beginAlertResync,
+  beginTripResync,
   queueAlertChange,
   queueTruckUpdate,
   startFlushing,
@@ -74,6 +75,7 @@ function startResync() {
   let cancelled = false;
   let timer = null;
   beginAlertResync();
+  beginTripResync();
 
   async function attempt(n) {
     const { applySnapshot, setSyncError } = useFleetStore.getState();
@@ -85,12 +87,14 @@ function startResync() {
       getJson('/api/health')
         .then((health) => !cancelled && useFleetStore.getState().setPipeline(health.pipeline ?? null))
         .catch(() => {});
-      const [body, alertBody, eventBody] = await Promise.all([
+      const [body, alertBody, eventBody, tripBody] = await Promise.all([
         getJson('/api/trucks'),
         getJson('/api/alerts'),
         getJson('/api/alerts/events?limit=500'),
+        getJson('/api/trips?limit=1000'),
       ]);
       if (cancelled) return;
+      useFleetStore.getState().applyTrips(tripBody.trips);
       useFleetStore.getState().applyAlerts({ alerts: alertBody.alerts, events: eventBody.events });
       applySnapshot(body, requestedAt);
       loadTrails(
@@ -134,6 +138,7 @@ export function useSocket() {
     socket.on('geofences:update', reloadZones);
     socket.on('zone:visit', (v) => useFleetStore.getState().addVisit(v));
     socket.on('rules:update', reloadRules);
+    socket.on('trip:update', (u) => useFleetStore.getState().applyTripUpdate(u));
 
     return () => {
       cancelResync();

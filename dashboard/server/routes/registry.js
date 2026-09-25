@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { SERVICE_TYPES } from '../services/registry.js';
 import { inputHandler } from './handle.js';
 
-// Fleet manager input: trucks, drivers, service records.
+// Fleet manager input: trucks, drivers, service records, trip assignments.
 export function registryRouter({ registry, onChange }) {
   const r = Router();
 
@@ -25,6 +25,10 @@ export function registryRouter({ registry, onChange }) {
   r.get('/service-records', handle((req) => ({ records: registry.listServiceRecords({ truck_id: req.query.truck_id }) })));
   r.post('/service-records', handle((req) => ({ record: registry.addServiceRecord(req.body ?? {}) }), 201));
   r.delete('/service-records/:id', handle((req) => registry.removeServiceRecord(req.params.id)));
+
+  r.get('/trip-assignments', handle((req) => ({ assignments: registry.listAssignments({ truck_id: req.query.truck_id }) })));
+  r.post('/trip-assignments', handle((req) => ({ assignment: registry.addAssignment(req.body ?? {}) }), 201));
+  r.delete('/trip-assignments/:id', handle((req) => registry.removeAssignment(req.params.id)));
 
   return r;
 }

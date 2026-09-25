@@ -16,6 +16,9 @@ const DATA_SOURCE = process.env.DATA_SOURCE || 'mock';
 const allowedOrigins = parseOrigins(process.env.CORS_ORIGINS || 'http://localhost:5173');
 // Demo scenario panel. Set DEMO_ENABLED=false to stop anyone triggering scenarios.
 const DEMO_ENABLED = (process.env.DEMO_ENABLED ?? 'true') !== 'false';
+// Seconds of simulated history replayed at boot (0 turns it off). 4800 s = 80 min, just under
+// the 5000-point ring buffer at 1 Hz.
+const WARM_START_S = Math.max(0, Math.min(4800, Number(process.env.WARM_START_S ?? 4800) || 0));
 // Manager-entered data (trucks, drivers, service records). A Postgres backend selected by
 // DATABASE_URL is planned; until then it is JSON files in DATA_DIR.
 // Set DATA_PERSISTENT=true only when DATA_DIR is on a disk that survives restarts.
@@ -29,7 +32,7 @@ const bff = createServer({
   allowedOrigins,
   demoEnabled: DEMO_ENABLED,
   storage,
-  makeSource: (onPoints) => createSource({ mode: DATA_SOURCE, onPoints }),
+  makeSource: (onPoints) => createSource({ mode: DATA_SOURCE, onPoints, warmStartS: WARM_START_S }),
 });
 
 const port = await bff.listen(PORT);

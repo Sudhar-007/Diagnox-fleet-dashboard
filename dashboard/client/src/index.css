@@ -187,3 +187,8 @@
 .zone-label--restricted span {
   color: var(--color-crit);
 }
+
+/* Replay marker: neutral, since the replay shows position, not live health. */
+.truck-pin--replay .truck-pin__dot {
+  background: var(--color-ink);
+}

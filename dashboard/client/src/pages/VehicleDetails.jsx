@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import AlertRow from '../components/AlertRow.jsx';
+import { AssignmentForm, AssignmentList } from '../components/Assignments.jsx';
 import Plate from '../components/Plate.jsx';
 import ProvenanceBadge from '../components/ProvenanceBadge.jsx';
 import RiskPanel from '../components/RiskPanel.jsx';
@@ -10,6 +11,7 @@ import ServiceRecordForm from '../components/ServiceRecordForm.jsx';
 import Sparkline from '../components/Sparkline.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import TriggerSosButton from '../components/TriggerSosButton.jsx';
+import TripTable from '../components/TripTable.jsx';
 import Button from '../components/ui/Button.jsx';
 import Panel from '../components/ui/Panel.jsx';
 import Tabs, { TabPanel } from '../components/ui/Tabs.jsx';
@@ -20,6 +22,8 @@ import { HEALTH_FIELDS, thresholdSummary } from '../lib/fields.js';
 import { formatAgo } from '../lib/format.js';
 import { parseTsMs } from '../lib/time.js';
 import { useTruckStatus } from '../lib/useTruckStatus.js';
+import { sortedTrips } from '../lib/trips.js';
+import { useAssignments } from '../hooks/useAssignments.js';
 import { useServiceRecords } from '../hooks/useServiceRecords.js';
 import { useFleetStore } from '../store/useFleetStore.js';
 
@@ -146,6 +150,42 @@ function MaintenanceTab({ truck, truckId }) {
   );
 }
 
+function TripsTab({ truckId }) {
+  const trips = useFleetStore((s) => s.trips);
+  const [adding, setAdding] = useState(false);
+  const { assignments, error } = useAssignments(truckId);
+  const own = sortedTrips(trips, { truck_id: truckId });
+  return (
+    <div className="space-y-4">
+      <Panel title={`Detected trips (${own.length})`} bodyClassName="overflow-x-auto">
+        {!trips ? (
+          <p className="px-4 py-4 text-[15px] text-muted">Loading trips…</p>
+        ) : (
+          <TripTable trips={own} showTruck={false} empty="No trips detected for this truck yet." />
+        )}
+      </Panel>
+      <Panel
+        title="Planned trips"
+        bodyClassName="overflow-x-auto"
+        actions={
+          !adding && (
+            <Button variant="primary" onClick={() => setAdding(true)}>
+              Add trip assignment
+            </Button>
+          )
+        }
+      >
+        {adding && (
+          <div className="border-b border-line p-4">
+            <AssignmentForm truckId={truckId} onDone={() => setAdding(false)} />
+          </div>
+        )}
+        {error ? <p className="p-4 text-sm text-crit">{error}</p> : <AssignmentList assignments={assignments} showTruck={false} />}
+      </Panel>
+    </div>
+  );
+}
+
 function Header({ truck, reg, truckId }) {
   const { age, status } = useTruckStatus(truck ?? {});
   return (
@@ -180,7 +220,7 @@ function Header({ truck, reg, truckId }) {
   );
 }
 
-const TAB_IDS = ['health', 'maintenance'];
+const TAB_IDS = ['health', 'maintenance', 'trips'];
 
 export default function VehicleDetails() {
   const { truckId } = useParams();
@@ -225,6 +265,7 @@ export default function VehicleDetails() {
           tabs={[
             { id: 'health', label: 'Health' },
             { id: 'maintenance', label: 'Maintenance' },
+            { id: 'trips', label: 'Trips' },
           ]}
         />
         <TabPanel id={tab}>
@@ -235,6 +276,7 @@ export default function VehicleDetails() {
               <p className="text-[15px] text-muted">Live values appear here once this truck starts reporting.</p>
             ))}
           {tab === 'maintenance' && <MaintenanceTab truck={truck} truckId={truckId} />}
+          {tab === 'trips' && <TripsTab truckId={truckId} />}
         </TabPanel>
       </div>
     </div>

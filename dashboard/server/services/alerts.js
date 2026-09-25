@@ -523,10 +523,10 @@ export function createAlertService({
 
   function list({ status, truck_id, kind } = {}) {
     let out = [...alerts.values()];
+    if (truck_id) out = out.filter((a) => a.truck_id === truck_id);
     if (kind) out = out.filter((a) => a.kind === kind);
     if (status === 'open') out = out.filter((a) => a.status !== 'RESOLVED');
     else if (status) out = out.filter((a) => a.status === status);
-    if (truck_id) out = out.filter((a) => a.truck_id === truck_id);
     return out.map((a) => ({ ...a })).reverse();
   }
 

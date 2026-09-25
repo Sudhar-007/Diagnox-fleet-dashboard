@@ -250,6 +250,10 @@ function OtherRules({ view }) {
     ],
     ['Zone crossing', `confirmed after ${view.geofence.confirm_points} readings in a row`],
     ['Maintenance risk', `looks back ${view.risk.window_s / 60} minutes`],
+    [
+      'Trip',
+      `starts after ${view.trips.start_hold_s} s above ${view.trips.start_speed_kmh} km/h, ends after ${view.trips.stop_hold_s / 60} min stopped or ${view.trips.no_data_end_s / 60} min without data`,
+    ],
   ];
   return (
     <dl className="grid gap-x-6 gap-y-2 text-[15px] sm:grid-cols-[auto_1fr]">

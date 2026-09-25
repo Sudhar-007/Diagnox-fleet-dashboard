@@ -77,6 +77,7 @@ export function createRuleSettings({ rules, storage, log = console }) {
       sos: rules.sos,
       risk: rules.risk,
       geofence: rules.geofence,
+      trips: rules.trips,
     };
   }
 

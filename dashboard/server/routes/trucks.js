@@ -15,6 +15,7 @@ export function trucksRouter({ fleet, store, rules }) {
       server_time: Date.now(),
       freshness: rules.freshness,
       health_rules: rules.health,
+      trip_rules: rules.trips,
       trucks: fleet.snapshot(),
     });
   });

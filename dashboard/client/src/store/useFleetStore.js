@@ -23,6 +23,19 @@ const RESOLVED_LIMIT = 1000;
 // forgotten) them, so they are replayed on top of the snapshot.
 let resyncLive = null;
 
+// Trip updates seen since the current resync began, replayed over the REST list.
+let tripLive = null;
+export function beginTripResync() {
+  tripLive = new Map();
+}
+
+// A completed copy always wins; otherwise the copy with the later reading.
+function newerTrip(existing, incoming) {
+  if (!existing) return true;
+  if (existing.status === 'completed') return false;
+  return incoming.status === 'completed' || incoming.last_at >= existing.last_at;
+}
+
 export function beginAlertResync() {
   pendingAlerts.clear();
   pendingEvents.length = 0;
@@ -83,6 +96,7 @@ export const useFleetStore = create((set) => ({
   alertsLoaded: false,
   freshnessRules: null,
   healthRules: null,
+  tripRules: null,
   clockOffsetMs: 0,
   connection: 'connecting',
   pipeline: null,
@@ -93,12 +107,14 @@ export const useFleetStore = create((set) => ({
   // Geofence zones and recent confirmed entries/exits (newest first).
   zones: null,
   zoneVisits: [],
+  // Detected trips by id (summaries, no path); null until the first load.
+  trips: null,
   syncError: null,
   now: Date.now(),
 
   // `requestedAt` is the client time the snapshot request was sent; the server
   // time is assumed to be halfway through the round trip.
-  applySnapshot({ server_time, freshness, health_rules, trucks }, requestedAt = Date.now()) {
+  applySnapshot({ server_time, freshness, health_rules, trip_rules, trucks }, requestedAt = Date.now()) {
     const now = Date.now();
     const snapshot = Object.fromEntries(trucks.map((t) => [t.truck_id, t]));
     // Socket updates that arrived while the request was in flight may be newer than the snapshot.
@@ -113,6 +129,7 @@ export const useFleetStore = create((set) => ({
       trucks: snapshot,
       trails: {},
       freshnessRules: freshness,
+      tripRules: trip_rules ?? null,
       ...(requestedAt >= rulesAppliedAt ? { healthRules: health_rules } : {}),
       clockOffsetMs: server_time - (requestedAt + now) / 2,
       syncError: null,
@@ -153,6 +170,18 @@ export const useFleetStore = create((set) => ({
         ? {}
         : { zoneVisits: [visit, ...s.zoneVisits].sort((a, b) => b.at_ms - a.at_ms).slice(0, VISIT_LIMIT) },
     ),
+  // Full list after a (re)connect: it replaces what was there (trip ids restart with the server).
+  applyTrips: (list) => {
+    const byId = Object.fromEntries(list.map((t) => [t.id, t]));
+    for (const [id, t] of tripLive ?? []) if (newerTrip(byId[id], t)) byId[id] = t;
+    tripLive = null;
+    set({ trips: byId });
+  },
+  // Starts, ends and a 5 s heartbeat per running trip: rare enough to apply directly.
+  applyTripUpdate: ({ trip }) => {
+    if (tripLive && newerTrip(tripLive.get(trip.id), trip)) tripLive.set(trip.id, trip);
+    set((s) => (s.trips && newerTrip(s.trips[trip.id], trip) ? { trips: { ...s.trips, [trip.id]: trip } } : {}));
+  },
   setHealthRules: (healthRules) => {
     rulesAppliedAt = Date.now();
     set({ healthRules });

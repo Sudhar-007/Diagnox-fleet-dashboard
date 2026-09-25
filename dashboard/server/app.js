@@ -8,6 +8,7 @@ import { createFleet } from './services/fleet.js';
 import { createRegistry } from './services/registry.js';
 import { createGeofences } from './services/geofences.js';
 import { createRuleSettings } from './services/ruleSettings.js';
+import { createTripService } from './services/trips.js';
 import { createMemoryStorage } from './services/storage.js';
 import { createAlertService } from './services/alerts.js';
 import { createScenarioService } from './services/scenarios.js';
@@ -21,10 +22,13 @@ import { alertsRouter } from './routes/alerts.js';
 import { demoRouter } from './routes/demo.js';
 import { registryRouter } from './routes/registry.js';
 import { settingsRouter } from './routes/settings.js';
+import { tripsRouter } from './routes/trips.js';
 
 // Wires store, engines, REST and Socket.IO around a telemetry source.
 // `makeSource(onPoints)` must return { start, stop, mode, requestedMode } and, when it runs
-// the simulator, `sim` (used by demo scenarios).
+// the simulator, `sim` (used by demo scenarios). `onPoints(points, provenance, { backfill })`:
+// backfilled points (warm start history) are stored and fed to trip detection only; they
+// raise no alerts and are not broadcast.
 export function createServer({
   rules: baseRules,
   allowedOrigins,
@@ -47,6 +51,16 @@ export function createServer({
     onVisit: (visit) => io.emit('zone:visit', visit),
   });
   const fleet = createFleet({ store, rules, registry, zonesInside: alerts.zonesInside });
+  const trips = createTripService({
+    rules,
+    zones: geofences.list,
+    alertsFor: (truck_id) =>
+      alerts
+        .list({ truck_id })
+        .map((a) => ({ id: a.id, kind: a.kind, name: a.name, level: a.level, opened_at: a.opened_at }))
+        .reverse(),
+  });
+  const emitTrip = ({ trip }) => io.emit('trip:update', { trip });
 
   const app = express();
   const server = http.createServer(app);
@@ -59,11 +73,34 @@ export function createServer({
     io.emit(kind === 'new' ? 'alert:new' : 'alert:update', { alert, event });
   };
 
-  const source = makeSource((points, provenance) => {
+  const source = makeSource((points, provenance, { backfill = false } = {}) => {
     const nowMs = Date.now();
+    // Trip detection judges every stored point, in time order (not only the newest per truck).
+    const feedTrips = (accepted, broadcast) => {
+      accepted.sort((a, b) => parseTs(a.timestamp) - parseTs(b.timestamp));
+      for (const p of accepted) {
+        try {
+          const changes = trips.ingest(p, { driver_name: registry.truckInfo(p.truck_id).driver_name, provenance }, nowMs);
+          if (broadcast) for (const change of changes) emitTrip(change);
+        } catch (err) {
+          log.error(`[bff] trip detection failed for ${p.truck_id}:`, err.message);
+        }
+      }
+    };
+    if (backfill) {
+      try {
+        const accepted = [];
+        fleet.backfill(points, provenance, nowMs, (p) => accepted.push(p));
+        feedTrips(accepted, false);
+      } catch (err) {
+        log.error('[bff] dropped a batch of history points:', err.message);
+      }
+      return;
+    }
     let payloads;
+    const accepted = [];
     try {
-      payloads = fleet.ingest(points, provenance, nowMs);
+      payloads = fleet.ingest(points, provenance, nowMs, (p) => accepted.push(p));
     } catch (err) {
       log.error('[bff] dropped a batch of points:', err.message);
       return;
@@ -91,6 +128,7 @@ export function createServer({
       }
       io.emit('truck:update', { ...payload, zones_inside, server_time: nowMs });
     }
+    feedTrips(accepted, true);
   });
 
   // Geofence breach demo: the nearest restricted zone that covers the truck, preferring
@@ -111,7 +149,9 @@ export function createServer({
   let sweepTimer = null;
   const runSweep = () => {
     try {
-      for (const change of alerts.sweep((id) => store.meta(id)?.received_at ?? null)) emitAlertChange(change);
+      const lastReceived = (id) => store.meta(id)?.received_at ?? null;
+      for (const change of alerts.sweep(lastReceived)) emitAlertChange(change);
+      for (const change of trips.sweep()) emitTrip(change);
       io.emit('pipeline:status', pipeline());
     } catch (err) {
       log.error('[bff] periodic sweep failed:', err.message);
@@ -125,6 +165,7 @@ export function createServer({
   app.use('/api', trucksRouter({ fleet, store, rules }));
   app.use('/api', alertsRouter({ alerts, fleet, onChange: emitAlertChange }));
   app.use('/api', demoRouter({ scenarios }));
+  app.use('/api', tripsRouter({ trips }));
   app.use('/api', registryRouter({ registry, onChange: () => io.emit('registry:update') }));
   app.use(
     '/api',
@@ -163,6 +204,7 @@ export function createServer({
     registry,
     geofences,
     ruleSettings,
+    trips,
     rules,
     runSweep,
     listen(port) {
