@@ -6,6 +6,8 @@
 // Values are chosen to cross the thresholds in config/rules.js; they are demo inputs,
 // not a model of a real failure.
 
+import { detourDuration, legDuration, pathLengths } from './simulator.js';
+
 const round = (v, dp) => Math.round(v * 10 ** dp) / 10 ** dp;
 const ramp = (t, start, end) => Math.min(1, Math.max(0, (t - start) / (end - start)));
 
@@ -99,28 +101,28 @@ export const SCENARIOS = {
     fuelLossPct: (t) => (t >= 40 && t < 70 ? 0.4 : 0),
   },
 
-  // Needs a target: the scenario service passes the nearest restricted zone to build().
+  // Needs a target and a road route: the scenario service passes the nearest restricted zone
+  // and the road paths there and back (from OSRM) to build().
+  // default_truck null: the scenario service picks the simulated truck closest to a restricted
+  // zone, so the demo does not wait on a long drive.
   geofence_breach: {
     label: 'Geofence breach',
-    default_truck: 'TN05',
-    duration_s: 85,
+    default_truck: null,
+    duration_s: 120,
     needs: 'restricted_zone',
-    description: 'The truck detours into the nearest restricted zone, stops there for about 25 s, then returns to its route.',
-    build(zone) {
+    road: true,
+    description:
+      'The truck closest to a restricted zone leaves its route, drives there by road, stops for about 25 s inside, then drives back and carries on.',
+    build(zone, { out, back, startSpeed }) {
+      const detour = { out, back, park_s: 25, cruise: 50 };
+      const km = pathLengths(out).at(-1) / 1000;
+      const enterMin = Math.max(1, Math.round(legDuration(out, startSpeed, detour.cruise) / 60));
       return {
         ...this,
-        description: `The truck detours into ${zone.name}, stops there for about 25 s, then returns to its route.`,
-        // Slows at a normal braking rate (3 km/h per second) so the stop is not read as a collision.
-        speedAt(t, speed) {
-          if (t >= 10 && t < 55) return Math.max(0, speed - 3);
-          return undefined;
-        },
-        apply(t, p) {
-          // 5-30 s head in, 30-55 s parked at the centre, 55-80 s head back
-          const shape = t < 30 ? ramp(t, 5, 30) : t < 55 ? 1 : 1 - ramp(t, 55, 80);
-          p.latitude = round(p.latitude + (zone.center_lat - p.latitude) * shape, 6);
-          p.longitude = round(p.longitude + (zone.center_lng - p.longitude) * shape, 6);
-        },
+        description: `The truck drives by road into ${zone.name}, stops for about 25 s, then drives back to its route.`,
+        note: `Enters ${zone.name} in about ${enterMin} min (${km.toFixed(1)} km by road)`,
+        detour,
+        duration_s: detourDuration(detour, startSpeed) + 2,
       };
     },
   },

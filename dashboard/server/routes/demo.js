@@ -10,9 +10,9 @@ export function demoRouter({ scenarios }) {
   });
 
   // Body: { scenario, truck_id? }
-  r.post('/demo/scenario', (req, res) => {
+  r.post('/demo/scenario', async (req, res) => {
     try {
-      res.json({ run: scenarios.start(req.body ?? {}), running: scenarios.running() });
+      res.json({ run: await scenarios.launch(req.body ?? {}), running: scenarios.running() });
     } catch (err) {
       if (err instanceof ScenarioError) return res.status(err.status).json({ error: err.message });
       throw err;

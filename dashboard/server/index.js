@@ -15,6 +15,11 @@ const PORT = Number(process.env.PORT) || 4000;
 const DATA_SOURCE = process.env.DATA_SOURCE || 'mock';
 // Shared secret the truck device sends in x-api-key to POST /api/telemetry.
 const TELEMETRY_API_KEY = process.env.TELEMETRY_API_KEY?.trim() || null;
+// Device trucks that are bench boards (static GPS): moved along a road loop by their own speed.
+const BENCH_TRUCKS = (process.env.BENCH_TRUCKS ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 const allowedOrigins = parseOrigins(process.env.CORS_ORIGINS || 'http://localhost:5173');
 // Demo scenario panel. Set DEMO_ENABLED=false to stop anyone triggering scenarios.
 const DEMO_ENABLED = (process.env.DEMO_ENABLED ?? 'true') !== 'false';
@@ -35,11 +40,13 @@ const bff = createServer({
   demoEnabled: DEMO_ENABLED,
   storage,
   telemetryKey: TELEMETRY_API_KEY,
+  benchTrucks: BENCH_TRUCKS,
   makeSource: (onPoints) => createSource({ mode: DATA_SOURCE, onPoints, warmStartS: WARM_START_S }),
 });
 
 const port = await bff.listen(PORT);
 console.log(`[bff] listening on :${port}, data source ${bff.source.mode()}`);
+if (BENCH_TRUCKS.length) console.log(`[bff] bench trucks (virtual road position): ${BENCH_TRUCKS.join(', ')}`);
 if (bff.source.acceptsDevice() && !TELEMETRY_API_KEY) {
   console.warn('[bff] TELEMETRY_API_KEY is not set; POST /api/telemetry is refused');
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { rules } from '../config/rules.js';
 import { createServer } from '../app.js';
+import { createScenarioService } from '../services/scenarios.js';
 import { stepZone } from '../engine/geofence.js';
 import { createAlertService } from '../services/alerts.js';
 import { createGeofences } from '../services/geofences.js';
@@ -221,6 +222,13 @@ test('an edited threshold changes what raises alerts', () => {
 });
 
 // A server fed by the real simulator, stepped by hand in simulated time.
+// Stand-in for OSRM in tests: five evenly spaced points from `from` to `to`.
+let roadCalls = 0;
+const fakeRoad = async (from, to) => {
+  roadCalls += 1;
+  return [0, 0.25, 0.5, 0.75, 1].map((f) => [from[0] + (to[0] - from[0]) * f, from[1] + (to[1] - from[1]) * f]);
+};
+
 function simServer() {
   const sim = createSimulator({ routes });
   let push;
@@ -228,6 +236,7 @@ function simServer() {
     rules,
     allowedOrigins: [],
     log: quiet,
+    roadRoute: fakeRoad,
     makeSource: (onPoints) => {
       push = onPoints;
       return { sim, start() {}, stop() {}, mode: () => 'mock', requestedMode: () => 'mock' };
@@ -244,17 +253,27 @@ function simServer() {
   return { bff, run, now: () => t };
 }
 
-test('scenario: geofence breach takes TN05 into the restricted zone and back out', () => {
+test('scenario: geofence breach drives TN05 along its road route into the zone and back out', async () => {
   const { bff, run, now } = simServer();
-  const started = bff.scenarios.start({ scenario: 'geofence_breach' }, now());
+  const before = bff.fleet.truck('TN05');
+  const started = await bff.scenarios.launch({ scenario: 'geofence_breach', truck_id: 'TN05' }, now());
   assert.equal(started.target, 'Kodungaiyur dump yard');
-  run(45);
+  assert.match(started.note, /^Enters Kodungaiyur dump yard in about \d+ min \([\d.]+ km by road\)$/);
+  assert.ok(roadCalls >= 2, 'asked the road router for the way there and back');
+  let waited = 0;
+  while (bff.alerts.list({ kind: 'geofence', status: 'open' }).length === 0 && waited < 900) {
+    run(5);
+    waited += 5;
+  }
   const open = bff.alerts.list({ kind: 'geofence', status: 'open' });
   assert.equal(open.length, 1);
   assert.equal(open[0].truck_id, 'TN05');
   assert.equal(open[0].zone_name, 'Kodungaiyur dump yard');
   assert.equal(bff.fleet.truck('TN05').zones_inside[0].zone_name, 'Kodungaiyur dump yard');
-  run(50);
+  run(Math.ceil((started.ends_ms - now()) / 1000) + 30);
+  // Back on its route where it left it, and moving on from there.
+  const after = bff.fleet.truck('TN05');
+  assert.ok(Math.abs(after.latitude - before.latitude) < 0.05 && Math.abs(after.longitude - before.longitude) < 0.05);
   const [closed] = bff.alerts.list({ kind: 'geofence' });
   assert.equal(closed.status, 'RESOLVED');
   assert.equal(closed.resolution, 'cleared');
@@ -263,10 +282,58 @@ test('scenario: geofence breach takes TN05 into the restricted zone and back out
   assert.deepEqual(types, ['left', 'entered']);
 });
 
-test('scenario: geofence breach needs a restricted zone covering the truck', () => {
+test('scenario: geofence breach needs a restricted zone covering the truck', async () => {
   const { bff, now } = simServer();
   bff.geofences.remove('Z-kodungaiyur');
-  assert.throws(() => bff.scenarios.start({ scenario: 'geofence_breach' }, now()), /no restricted zone covers TN05/);
+  await assert.rejects(bff.scenarios.launch({ scenario: 'geofence_breach', truck_id: 'TN05' }, now()), /no restricted zone covers TN05/);
+  await assert.rejects(bff.scenarios.launch({ scenario: 'geofence_breach' }, now()), /no restricted zone covers any simulated truck/);
+});
+
+test('scenario: geofence breach without a truck picks the one closest to the zone', async () => {
+  const { bff, now } = simServer();
+  const zone = bff.geofences.list().find((z) => z.id === 'Z-kodungaiyur');
+  const dist = (id) => {
+    const t = bff.fleet.truck(id);
+    return Math.hypot(t.latitude - zone.center_lat, (t.longitude - zone.center_lng) * Math.cos((zone.center_lat * Math.PI) / 180));
+  };
+  const closest = ['TN01', 'TN02', 'TN03', 'TN04', 'TN05'].sort((a, b) => dist(a) - dist(b))[0];
+  const started = await bff.scenarios.launch({ scenario: 'geofence_breach' }, now());
+  assert.equal(started.truck_id, closest);
+});
+
+test('scenario: a detouring truck takes no other scenario, and a stalled detour still finishes by road', async () => {
+  const { bff, run, now } = simServer();
+  const started = await bff.scenarios.launch({ scenario: 'geofence_breach', truck_id: 'TN05' }, now());
+  run(20);
+  assert.throws(() => bff.scenarios.start({ scenario: 'overheat', truck_id: 'TN05' }, now()), /still on its detour/);
+  await assert.rejects(bff.scenarios.launch({ scenario: 'geofence_breach', truck_id: 'TN05' }, now()), /still on its detour/);
+  // Wall clock far past the planned end (a stalled server): the detour is not cut short.
+  const plannedS = Math.ceil((started.ends_ms - started.started_ms) / 1000);
+  let prev = bff.fleet.truck('TN05');
+  let worstJump = 0;
+  for (let i = 0; i < plannedS + 120; i++) {
+    run(1);
+    const t = bff.fleet.truck('TN05');
+    worstJump = Math.max(worstJump, Math.hypot(t.latitude - prev.latitude, t.longitude - prev.longitude) * 111320);
+    prev = t;
+  }
+  assert.ok(worstJump < 30, `truck jumped ${worstJump.toFixed(0)} m in one second`);
+  const harsh = (bff.driving.list?.() ?? []).filter((e) => e.truck_id === 'TN05' && e.type === 'harsh_brake');
+  assert.equal(harsh.length, 0, 'arriving and leaving the zone is not harsh braking');
+});
+
+test('scenario: geofence breach does not start when road routing is unavailable', async () => {
+  const { bff, now } = simServer();
+  const failing = createScenarioService({
+    sim: bff.source.sim,
+    enabled: true,
+    restrictedZoneFor: () => bff.geofences.list().find((z) => z.type === 'restricted'),
+    roadRoute: async () => {
+      throw new Error('timed out');
+    },
+  });
+  await assert.rejects(failing.launch({ scenario: 'geofence_breach', truck_id: 'TN05' }, now()), /road routing is unavailable/);
+  assert.equal(failing.running().length, 0);
 });
 
 test('normal driving for 40 minutes raises no zone alerts with the seeded zones', () => {

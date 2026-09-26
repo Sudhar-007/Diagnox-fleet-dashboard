@@ -38,11 +38,38 @@ export const FUEL_SENSOR_TRUCKS = ['TN01'];
 const REFILL_BELOW_PCT = 25;
 const REFILL_PCT_S = 0.5;
 
+// The leg the truck is on. A stop with a road `path` (see sim/routes.js) is driven along that
+// path; a bare stop (hand-made routes in tests) is a straight line to the next stop.
 function segmentOf(truck) {
   const n = truck.route.length;
   const from = truck.route[truck.seg];
   const to = truck.route[(truck.seg + 1) % n];
-  return { from, to, length: haversine(from.lat, from.lng, to.lat, to.lng) };
+  if (from.path) return { from, to, length: from.cum[from.cum.length - 1], path: from.path, cum: from.cum };
+  return { from, to, length: haversine(from.lat, from.lng, to.lat, to.lng), path: null, cum: null };
+}
+
+// Cumulative metres along a path of [lat, lng] points.
+export function pathLengths(path) {
+  const cum = [0];
+  for (let k = 1; k < path.length; k++) cum.push(cum[k - 1] + haversine(path[k - 1][0], path[k - 1][1], path[k][0], path[k][1]));
+  return cum;
+}
+
+// Position `dist` metres along a road path: the two road points either side of it, and the
+// share of the way between them. Both points are on the road, so the result is too.
+export function pointAlong(path, cum, dist) {
+  if (dist <= 0) return path[0];
+  const last = cum.length - 1;
+  if (dist >= cum[last]) return path[last];
+  let lo = 0;
+  let hi = last;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= dist) lo = mid;
+    else hi = mid;
+  }
+  const f = cum[hi] > cum[lo] ? (dist - cum[lo]) / (cum[hi] - cum[lo]) : 0;
+  return [lerp(path[lo][0], path[hi][0], f), lerp(path[lo][1], path[hi][1], f)];
 }
 
 function initTruck(truck_id, route, index) {
@@ -143,13 +170,106 @@ function advance(truck, dt) {
   return prevSpeed;
 }
 
+// One second of driving toward a stop `remaining` metres ahead: accelerate to `cruise`, brake at
+// a normal rate so the truck comes to rest at the stop. Same limits as route driving, so a
+// detour never reads as harsh driving or a collision.
+function driveToStop(speed, remaining, cruise, dt) {
+  let desired = Math.min(cruise, Math.sqrt(2 * STOP_DECEL_MS2 * remaining) * 3.6);
+  if (remaining > 0) desired = Math.max(desired, CREEP_KMH);
+  const v = clamp(speed + clamp(desired - speed, -DECEL_KMH_S * dt, ACCEL_KMH_S * dt), 0, 120);
+  const step = (v / 3.6) * dt;
+  // Arrive at crawl speed (<= ARRIVE_KMH); the next tick (parked) reads 0, so the stop is never
+  // read as harsh braking.
+  if (remaining <= Math.max(step, 3) && v <= ARRIVE_KMH) return { speed: v, moved: remaining, arrived: true };
+  return { speed: v, moved: Math.min(step, remaining), arrived: false };
+}
+
+// A scenario detour: drive `out` (road path) to its end, park `park_s`, drive `back` to where
+// the truck left its route. The truck's place on its route is frozen meanwhile.
+function createDetourRun(detour, startSpeed) {
+  const legs = [
+    { path: detour.out, cum: pathLengths(detour.out) },
+    { path: detour.back, cum: pathLengths(detour.back) },
+  ];
+  const state = { leg: 0, dist: 0, parkLeft: detour.park_s, speed: startSpeed, done: false };
+  return {
+    state,
+    tick(dt) {
+      if (state.done) return;
+      if (state.leg === 1 && state.parkLeft > 0) {
+        state.speed = 0;
+        state.parkLeft -= dt;
+        return;
+      }
+      if (state.arrivedBack) {
+        state.speed = 0;
+        state.done = true;
+        return;
+      }
+      const leg = legs[state.leg === 0 ? 0 : 1];
+      const length = leg.cum[leg.cum.length - 1];
+      const r = driveToStop(state.speed, length - state.dist, detour.cruise, dt);
+      state.speed = r.speed;
+      state.dist += r.moved;
+      if (!r.arrived) return;
+      if (state.leg === 0) {
+        state.leg = 1;
+        state.dist = 0;
+      } else {
+        state.arrivedBack = true; // one more tick at the end, reading 0 km/h
+      }
+    },
+    position() {
+      const leg = legs[state.leg];
+      return pointAlong(leg.path, leg.cum, state.dist);
+    },
+  };
+}
+
+// Upper bound for planning a detour (a detour itself only ends when the truck is back).
+const MAX_PLAN_S = 6 * 3600;
+
+// Seconds to drive a road path from `startSpeed` to a stop at its end.
+export function legDuration(path, startSpeed, cruise) {
+  const cum = pathLengths(path);
+  const length = cum[cum.length - 1];
+  let speed = startSpeed;
+  let dist = 0;
+  let t = 0;
+  while (t < MAX_PLAN_S) {
+    const r = driveToStop(speed, length - dist, cruise, 1);
+    speed = r.speed;
+    dist += r.moved;
+    t += 1;
+    if (r.arrived) break;
+  }
+  return t;
+}
+
+// Seconds a detour takes from `startSpeed`, by running it: the scenario's length.
+export function detourDuration(detour, startSpeed = 0) {
+  const run = createDetourRun(detour, startSpeed);
+  let t = 0;
+  while (!run.state.done && t < MAX_PLAN_S) {
+    run.tick(1);
+    t += 1;
+  }
+  return t;
+}
+
+// Where the truck is now: on its leg's road path, or on a scenario detour when one is running.
+function positionOf(truck) {
+  if (truck.scenario?.detour) return truck.scenario.detour.position();
+  const { from, to, length, path, cum } = segmentOf(truck);
+  if (path) return pointAlong(path, cum, truck.dist);
+  const f = length > 0 ? Math.min(1, truck.dist / length) : 0;
+  return [lerp(from.lat, to.lat, f), lerp(from.lng, to.lng, f)];
+}
+
 function readings(truck, prevSpeed, dt, timestamp) {
   const { rng } = truck;
   const noise = (amp) => (rng() * 2 - 1) * amp;
-  const { from, to, length } = segmentOf(truck);
-  const f = length > 0 ? Math.min(1, truck.dist / length) : 0;
-  const latitude = lerp(from.lat, to.lat, f);
-  const longitude = lerp(from.lng, to.lng, f);
+  const [latitude, longitude] = positionOf(truck);
 
   const accel = (truck.speed - prevSpeed) / dt;
   let engine_load = 0;
@@ -211,15 +331,29 @@ export function createSimulator({ routes, truckIds = Object.keys(routes), fuelSe
     for (const truck of trucks) {
       if (truck.scenario) {
         truck.scenario.tRel = (nowMs - truck.scenario.startMs) / 1000;
-        if (truck.scenario.tRel >= truck.scenario.def.duration_s) truck.scenario = null;
+        // A detour ends only when the truck is back on its route (below), never on the clock,
+        // so a stalled event loop or a long drive cannot cut it short and teleport the truck.
+        if (!truck.scenario.detour && truck.scenario.tRel >= truck.scenario.def.duration_s) truck.scenario = null;
       }
       const sc = truck.scenario;
-      const prevSpeed = advance(truck, dt);
+      let prevSpeed;
+      if (sc?.detour) {
+        prevSpeed = truck.speed;
+        sc.detour.tick(dt);
+        truck.speed = sc.detour.state.speed;
+        truck.phase = 'drive';
+        truck.engineOn = true;
+        truck.t += dt;
+      } else {
+        prevSpeed = advance(truck, dt);
+      }
       const point = readings(truck, prevSpeed, dt, timestamp);
       updateFuel(truck, point, dt);
       if (sc?.def.apply) sc.def.apply(sc.tRel, point);
       if (sc?.def.silent?.(sc.tRel)) continue;
       out.push(point);
+      // A detour ends when the truck is back where it left its route.
+      if (sc?.detour?.state.done) truck.scenario = null;
     }
     return out;
   }
@@ -227,12 +361,21 @@ export function createSimulator({ routes, truckIds = Object.keys(routes), fuelSe
   return {
     truckIds: () => trucks.map((t) => t.truck_id),
     hasFuelSensor: (truck_id) => byId.get(truck_id)?.fuelPct != null,
+    // True while the truck is away from its route on a scenario detour.
+    detouring: (truck_id) => Boolean(byId.get(truck_id)?.scenario?.detour),
+    // Current position and speed, for scenarios that plan a detour from here.
+    stateOf(truck_id) {
+      const truck = byId.get(truck_id);
+      if (!truck) return null;
+      const [lat, lng] = positionOf(truck);
+      return { lat, lng, speed: truck.speed };
+    },
     step,
     // Runs a scenario definition (see sim/scenarios.js) on one truck from startMs.
     inject(truck_id, def, startMs) {
       const truck = byId.get(truck_id);
       if (!truck) return false;
-      truck.scenario = { def, startMs, tRel: 0 };
+      truck.scenario = { def, startMs, tRel: 0, detour: def.detour ? createDetourRun(def.detour, truck.speed) : null };
       return true;
     },
     start(onPoints, intervalMs = 1000) {

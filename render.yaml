@@ -25,3 +25,7 @@ services:
       # Secret the device sends in x-api-key; set it in the Render dashboard, never in git.
       - key: TELEMETRY_API_KEY
         sync: false
+      # The hardware board sits still on a bench: its position is generated along a road loop
+      # from the speed it reports (see docs/interface.md). Remove when the board is in a truck.
+      - key: BENCH_TRUCKS
+        value: TN06

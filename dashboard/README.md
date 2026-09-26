@@ -1,4 +1,4 @@
-# Fleet Command dashboard
+# DiagnoX dashboard
 
 React client (Vercel) and Express BFF (single Docker container) for live fleet telemetry.
 The telemetry contract is in `../docs/interface.md`; every threshold is in `server/config/rules.js`.
@@ -35,7 +35,8 @@ is created; set it to the Vercel URLs, e.g.
 Keeping the team slug in the preview pattern stops other Vercel accounts' projects from matching.
 The server logs the allowed origins at startup; check them in the Render logs after the first deploy.
 Set `TELEMETRY_API_KEY` in the Render dashboard (Environment) to accept device data; without it
-`POST /api/telemetry` answers 503.
+`POST /api/telemetry` answers 503. `BENCH_TRUCKS=TN06` marks the hardware board as a bench unit whose
+position is generated along a road loop from its reported speed (see `docs/interface.md`).
 Run exactly one instance: all state is in memory.
 
 Frontend (Vercel): import the repo, set Root Directory to `dashboard/client` (framework Vite is detected),

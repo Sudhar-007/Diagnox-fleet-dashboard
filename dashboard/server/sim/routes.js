@@ -1,8 +1,14 @@
-// Looping waypoint routes across Chennai. `dwell_s` = stop at that waypoint,
-// `cruise` = target speed (km/h) on the segment that leaves it.
-// Long dwells (>= 120 s) are depot / yard stops where the engine is switched off.
+import { existsSync, readFileSync } from 'node:fs';
 
-export const routes = {
+import { haversine } from '../engine/geo.js';
+
+// Looping routes across Chennai, as named stops. `dwell_s` = stop at that waypoint,
+// `cruise` = target speed (km/h) on the leg that leaves it.
+// Long dwells (>= 120 s) are depot / yard stops where the engine is switched off.
+// Trucks drive the road path of each leg from sim/roadRoutes.json (built from OpenStreetMap
+// by sim/buildRoadRoutes.mjs), never a straight line between stops.
+
+export const waypoints = {
   TN01: [
     { name: 'Chennai Port', lat: 13.096, lng: 80.292, dwell_s: 150, cruise: 35 },
     { name: 'Chennai Central', lat: 13.0827, lng: 80.2757, cruise: 40 },
@@ -44,3 +50,72 @@ export const routes = {
     { name: 'Red Hills', lat: 13.1865, lng: 80.1999, cruise: 60 },
   ],
 };
+
+// Road loop for bench boards (BENCH_TRUCKS): a real device that cannot move is placed along
+// this loop by its own reported speed. An area the simulated trucks do not drive.
+export const benchWaypoints = [
+  { name: 'Avadi', lat: 13.1147, lng: 80.1098 },
+  { name: 'Thiruninravur', lat: 13.1155, lng: 80.0264 },
+  { name: 'Thirumazhisai', lat: 13.0526, lng: 80.06 },
+];
+
+// Each stop carries the road path of the leg that leaves it (`path`: [[lat, lng], ...] and
+// `cum`: metres along it), and sits where that path starts, i.e. on the road.
+function withRoads(stops, legs) {
+  return stops.map((stop, i) => {
+    const path = legs[i].path;
+    const cum = [0];
+    for (let k = 1; k < path.length; k++) cum.push(cum[k - 1] + haversine(path[k - 1][0], path[k - 1][1], path[k][0], path[k][1]));
+    return { ...stop, lat: path[0][0], lng: path[0][1], path, cum };
+  });
+}
+
+const ROADS = new URL('./roadRoutes.json', import.meta.url);
+
+// The stored road file, or null when it is missing or unreadable (the build script rewrites it).
+function readRoads() {
+  if (!existsSync(ROADS)) {
+    console.error('[sim] sim/roadRoutes.json is missing; run node sim/buildRoadRoutes.mjs');
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(ROADS, 'utf8'));
+  } catch (err) {
+    console.error(`[sim] sim/roadRoutes.json is unreadable (${err.message}); run node sim/buildRoadRoutes.mjs`);
+    return null;
+  }
+}
+const ROAD_FILE = readRoads();
+
+function loadRoutes() {
+  if (!ROAD_FILE?.trucks) return waypoints;
+  const roads = ROAD_FILE.trucks;
+  const out = {};
+  for (const [id, stops] of Object.entries(waypoints)) {
+    const legs = roads[id];
+    if (!legs || legs.length !== stops.length || legs.some((l, i) => l.from !== stops[i].name)) {
+      console.error(`[sim] road paths for ${id} do not match its stops; run node sim/buildRoadRoutes.mjs`);
+      out[id] = stops;
+      continue;
+    }
+    out[id] = withRoads(stops, legs);
+  }
+  return out;
+}
+
+export const routes = loadRoutes();
+
+// The bench loop as one closed road path ({ path, cum } in metres), or null if not built yet.
+function loadBenchLoop() {
+  const legs = ROAD_FILE?.bench;
+  if (!legs || legs.length !== benchWaypoints.length || legs.some((l, i) => l.from !== benchWaypoints[i].name)) {
+    console.error('[sim] bench road loop is missing or stale; run node sim/buildRoadRoutes.mjs');
+    return null;
+  }
+  const path = legs.flatMap((l, i) => (i === 0 ? l.path : l.path.slice(1)));
+  const cum = [0];
+  for (let k = 1; k < path.length; k++) cum.push(cum[k - 1] + haversine(path[k - 1][0], path[k - 1][1], path[k][0], path[k][1]));
+  return { path, cum };
+}
+
+export const benchLoop = loadBenchLoop();

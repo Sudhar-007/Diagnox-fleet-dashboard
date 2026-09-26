@@ -32,6 +32,8 @@ import { fuelRouter } from './routes/fuel.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { telemetryRouter } from './routes/telemetry.js';
 import { PROVENANCE } from './services/source.js';
+import { createBenchPositions } from './services/bench.js';
+import { benchLoop } from './sim/routes.js';
 
 // Wires store, engines, REST and Socket.IO around a telemetry source.
 // `makeSource(onPoints)` must return { start, stop, mode, requestedMode } and, when it runs
@@ -48,8 +50,12 @@ export function createServer({
   storage = createMemoryStorage(),
   demoEnabled = true,
   forest = maintenanceForest,
+  // Road router for demo detours ((from, to) -> Promise of [[lat, lng], ...]); OSRM when omitted.
+  roadRoute,
   // Key the truck device must send in x-api-key to POST /api/telemetry; no key, no device data.
   telemetryKey = null,
+  // Device trucks that cannot move (bench boards): placed along a road loop by their speed.
+  benchTrucks = [],
   log = console,
 }) {
   // Thresholds are edited at runtime (Settings), so each server works on its own copy.
@@ -202,6 +208,13 @@ export function createServer({
   // Ids the simulator drives. A device may not push these: mixing simulated and real readings
   // on one truck would fake collisions, harsh braking and trip jumps.
   const simIds = new Set(source.sim?.truckIds?.() ?? []);
+  const bench = createBenchPositions({
+    truckIds: benchTrucks,
+    loop: benchLoop,
+    maxStepS: rules.freshness.stale_after_s,
+    maxFutureS: rules.ingest.max_future_s,
+  });
+  if (benchTrucks.length && !benchLoop) log.error('[bff] BENCH_TRUCKS is set but the bench road loop is missing');
 
   // Device pushes go in one point at a time, oldest first, so every point of a backlog sent
   // after a 4G outage is judged for alerts, SOS and collisions, not only the newest.
@@ -215,7 +228,7 @@ export function createServer({
       let kept = 0;
       for (let i = 0; i < sorted.length; i++) {
         if (i > 0 && i % YIELD_EVERY === 0) await new Promise((resolve) => setImmediate(resolve));
-        kept += handlePoints([sorted[i]], PROVENANCE.LIVE_HW);
+        kept += handlePoints([bench.place(sorted[i])], PROVENANCE.LIVE_HW);
       }
       return kept;
     };
@@ -232,7 +245,12 @@ export function createServer({
     const candidates = geofences.list().filter((z) => z.type === 'restricted' && appliesTo(z, truck_id));
     return candidates.sort((a, b) => Number(b.alert) - Number(a.alert) || dist(a) - dist(b))[0] ?? null;
   };
-  const scenarios = createScenarioService({ sim: source.sim ?? null, enabled: demoEnabled, restrictedZoneFor });
+  const scenarios = createScenarioService({
+    sim: source.sim ?? null,
+    enabled: demoEnabled,
+    restrictedZoneFor,
+    ...(roadRoute ? { roadRoute } : {}),
+  });
   const pipeline = () =>
     computePipeline({ mode: source.mode(), trucks: fleet.snapshot(), nowMs: Date.now(), startedAt });
 
@@ -266,7 +284,7 @@ export function createServer({
     }),
   );
   app.use(express.json({ limit: '100kb' }));
-  app.use('/api', healthRouter({ source, fleet, startedAt, pipeline }));
+  app.use('/api', healthRouter({ source, fleet, startedAt, pipeline, benchTrucks: bench.ids }));
   app.use('/api', trucksRouter({ fleet, store, rules }));
   app.use('/api', alertsRouter({ alerts, fleet, onChange: emitAlertChange }));
   app.use('/api', demoRouter({ scenarios }));
