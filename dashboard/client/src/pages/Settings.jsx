@@ -5,6 +5,7 @@ import Plate from '../components/Plate.jsx';
 import ZoneForm from '../components/ZoneForm.jsx';
 import Button from '../components/ui/Button.jsx';
 import Panel, { EmptyState } from '../components/ui/Panel.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
 import Tabs, { TabPanel } from '../components/ui/Tabs.jsx';
 import { API_URL } from '../config.js';
 import { sendJson, timeoutSignal } from '../lib/api.js';
@@ -13,6 +14,7 @@ import { formatClock } from '../lib/format.js';
 import { zoneRule, zoneScope } from '../lib/zones.js';
 import { reloadRules, reloadZones } from '../hooks/useSocket.js';
 import { useFleetStore } from '../store/useFleetStore.js';
+import { toast } from '../lib/toast.js';
 
 function RemoveZone({ zone }) {
   const [confirming, setConfirming] = useState(false);
@@ -21,6 +23,7 @@ function RemoveZone({ zone }) {
     try {
       await sendJson(`/api/geofences/${encodeURIComponent(zone.id)}`, 'DELETE');
       await reloadZones();
+      toast(`Zone ${zone.name} deleted`);
     } catch (err) {
       setError(err.message);
       setConfirming(false);
@@ -56,11 +59,11 @@ function VisitLog({ visits }) {
   }
   return (
     <table className="w-full min-w-[520px] text-left text-sm">
-      <thead className="border-b border-line text-muted">
+      <thead className="border-b border-line">
         <tr>
-          <th className="px-4 py-2 font-normal">Time</th>
-          <th className="px-4 py-2 font-normal">Truck</th>
-          <th className="px-4 py-2 font-normal">Event</th>
+          <th className="px-4 py-2">Time</th>
+          <th className="px-4 py-2">Truck</th>
+          <th className="px-4 py-2">Event</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-line">
@@ -113,7 +116,7 @@ function GeofencesTab() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
-        <p className="max-w-2xl text-[15px] text-muted">
+        <p className="max-w-2xl text-sm text-muted">
           Circles on the map. A restricted zone alerts while a covered truck is inside it, an allowed zone while a covered
           truck is outside it. A crossing counts after two readings in a row, so GPS jitter at the edge is ignored.
         </p>
@@ -143,14 +146,14 @@ function GeofencesTab() {
           <EmptyState>No zones yet. Use Add zone to draw the first one.</EmptyState>
         ) : (
           <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="border-b border-line text-muted">
+            <thead className="border-b border-line">
               <tr>
-                <th className="px-4 py-2 font-normal">Zone</th>
-                <th className="px-4 py-2 font-normal">Rule</th>
-                <th className="px-4 py-2 font-normal">Applies to</th>
-                <th className="px-4 py-2 font-normal">Radius</th>
-                <th className="px-4 py-2 font-normal">Inside now</th>
-                <th className="px-4 py-2 font-normal">
+                <th className="px-4 py-2">Zone</th>
+                <th className="px-4 py-2">Rule</th>
+                <th className="px-4 py-2">Applies to</th>
+                <th className="px-4 py-2">Radius</th>
+                <th className="px-4 py-2">Inside now</th>
+                <th className="px-4 py-2">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -256,7 +259,7 @@ function OtherRules({ view }) {
     ],
   ];
   return (
-    <dl className="grid gap-x-6 gap-y-2 text-[15px] sm:grid-cols-[auto_1fr]">
+    <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
       {items.map(([k, v]) => (
         <div key={k} className="contents">
           <dt className="text-muted">{k}</dt>
@@ -295,6 +298,7 @@ function ThresholdsTab() {
       setView(next);
       setDraft({});
       setSavedAt(new Date().toLocaleTimeString('en-GB', { hour12: false }));
+      toast(`${changed.length} ${changed.length === 1 ? 'threshold' : 'thresholds'} saved`);
       reloadRules();
     } catch (err) {
       setError(err.message);
@@ -303,24 +307,24 @@ function ThresholdsTab() {
     }
   };
 
-  if (!view) return <p className="text-[15px] text-muted">{loadError ?? 'Loading the rules…'}</p>;
+  if (!view) return <p className="text-sm text-muted">{loadError ?? 'Loading the rules…'}</p>;
 
   return (
     <div className="space-y-5">
-      <p className="max-w-2xl text-[15px] text-muted">
+      <p className="max-w-2xl text-sm text-muted">
         Demo-tuned values, not validated limits. A change applies to every truck at once: alerts, health colours and the
         maintenance risk score all use these numbers. Open alerts on a changed value close and are checked again against the new numbers.
       </p>
 
       <Panel bodyClassName="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-sm">
-          <thead className="border-b border-line text-muted">
+          <thead className="border-b border-line">
             <tr>
-              <th className="px-4 py-2 font-normal">Value</th>
-              <th className="px-4 py-2 font-normal">Rule</th>
-              <th className="px-4 py-2 font-normal">Fires when</th>
-              <th className="px-4 py-2 font-normal">Threshold</th>
-              <th className="px-4 py-2 font-normal">Default</th>
+              <th className="px-4 py-2">Value</th>
+              <th className="px-4 py-2">Rule</th>
+              <th className="px-4 py-2">Fires when</th>
+              <th className="px-4 py-2">Threshold</th>
+              <th className="px-4 py-2">Default</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -359,7 +363,7 @@ function ThresholdsTab() {
                           max={r.limits?.[1]}
                           value={valueOf(r)}
                           onChange={(e) => setDraft((d) => ({ ...d, [r.id]: e.target.value }))}
-                          className={`w-24 rounded-[4px] border bg-asphalt px-2 py-1 text-[15px] text-ink focus:border-muted focus:outline-none ${
+                          className={`w-24 rounded-[4px] border bg-surface px-2 py-1 text-sm text-ink focus:border-muted focus:outline-none ${
                             edited ? 'border-plate' : 'border-line'
                           }`}
                         />
@@ -414,21 +418,24 @@ export default function Settings() {
   const tab = TAB_IDS.includes(params.get('tab')) ? params.get('tab') : 'geofences';
 
   return (
-    <div className="mx-auto max-w-[1300px]">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h1 className="font-cond text-2xl font-bold">Settings</h1>
-        <Link to="/live" className="text-sm text-ink underline decoration-line underline-offset-4 hover:decoration-ink">
-          See zones on the Live Map
-        </Link>
-      </div>
-      <div className="mt-4">
+    <div className="mx-auto max-w-[1440px]">
+      <PageHeader
+        title="Settings"
+        description="Geofences and the alert thresholds every truck is judged against. Changes apply to the whole fleet at once."
+        actions={
+          <Link to="/live" className="text-[13px] font-medium text-accent hover:underline">
+            See zones on the live map
+          </Link>
+        }
+      />
+      <div>
         <Tabs
           label="Settings sections"
           value={tab}
           onChange={(id) => setParams(id === 'geofences' ? {} : { tab: id }, { replace: true })}
           tabs={[
             { id: 'geofences', label: 'Geofences' },
-            { id: 'thresholds', label: 'Alert Thresholds' },
+            { id: 'thresholds', label: 'Alert thresholds' },
           ]}
         />
         <TabPanel id={tab}>

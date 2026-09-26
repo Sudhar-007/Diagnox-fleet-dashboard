@@ -5,6 +5,7 @@ import Field from './ui/Field.jsx';
 import { sendJson } from '../lib/api.js';
 import { reloadRegistry } from '../hooks/useSocket.js';
 import { useFleetStore } from '../store/useFleetStore.js';
+import { toast } from '../lib/toast.js';
 
 // Add a driver, or edit one. Picking a truck puts the driver on it in place of its current driver.
 export default function DriverForm({ driver = null, onDone }) {
@@ -33,6 +34,7 @@ export default function DriverForm({ driver = null, onDone }) {
       if (driver) await sendJson(`/api/registry/drivers/${encodeURIComponent(driver.driver_id)}`, 'PUT', body);
       else await sendJson('/api/registry/drivers', 'POST', body);
       await reloadRegistry();
+      toast(driver ? `${form.name.trim()} saved` : `${form.name.trim()} added`);
       onDone?.();
     } catch (err) {
       setError(err.message);
@@ -65,7 +67,7 @@ export default function DriverForm({ driver = null, onDone }) {
         <Button type="submit" variant="primary" disabled={saving}>
           {saving ? 'Saving…' : driver ? 'Save changes' : 'Add driver'}
         </Button>
-        <Button variant="quiet" onClick={onDone} disabled={saving}>
+        <Button variant="quiet" onClick={() => onDone?.()} disabled={saving}>
           Cancel
         </Button>
         {error && (

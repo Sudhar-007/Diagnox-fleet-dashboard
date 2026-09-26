@@ -20,7 +20,8 @@ import { API_URL } from '../config.js';
 import { timeoutSignal } from '../lib/api.js';
 import { byUrgency, isOpen } from '../lib/alerts.js';
 import { HEALTH_FIELDS, thresholdSummary } from '../lib/fields.js';
-import { formatAgo } from '../lib/format.js';
+import { formatAgo, formatNumber } from '../lib/format.js';
+import { engineText, locationText } from '../lib/fleetView.js';
 import { parseTsMs } from '../lib/time.js';
 import { useTruckStatus } from '../lib/useTruckStatus.js';
 import { sortedTrips } from '../lib/trips.js';
@@ -71,35 +72,51 @@ function HealthTab({ truck, points }) {
   const rules = useFleetStore((s) => s.healthRules) ?? [];
   const findings = Object.fromEntries((truck.findings ?? []).map((f) => [f.field, f]));
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {HEALTH_FIELDS.map((f) => {
-        const finding = findings[f.field];
-        const value = truck[f.field];
-        return (
-          <Panel key={f.field} as="section" aria-label={f.label} bodyClassName="p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="text-[15px] text-ink">{f.label}</h3>
-                <p className="text-xs text-muted">{f.field}</p>
-              </div>
-              <div className="text-right">
-                <span className="font-cond text-3xl font-bold leading-none">
-                  {typeof value === 'number' ? value.toFixed(f.digits) : 'n/a'}
-                </span>
-                <span className="ml-1 text-sm text-muted">{f.unit}</span>
-              </div>
-            </div>
-            <p className={`mt-1 text-sm ${finding ? (finding.level === 'critical' ? 'text-crit' : 'text-warn') : 'text-muted'}`}>
-              {finding ? `${finding.name}: ${finding.op} ${finding.threshold} ${finding.unit}` : 'Within limits'}
-            </p>
-            <div className="mt-2">
-              <Sparkline points={points} field={f.field} unit={f.unit} digits={f.digits} rules={rules} label={f.label} />
-            </div>
-            <p className="mt-1 text-xs text-faint">{thresholdSummary(rules, f.field)}</p>
-          </Panel>
-        );
-      })}
-    </div>
+    <Panel title="Readings" description="Latest value per sensor, the last 5 minutes, and the limits it is judged against." bodyClassName="overflow-x-auto">
+      <table className="w-full min-w-[860px] text-left text-sm">
+        <thead className="border-b border-line">
+          <tr>
+            <th className="px-4 py-2">Reading</th>
+            <th className="px-3 py-2 text-right">Now</th>
+            <th className="px-3 py-2">State</th>
+            <th className="w-[34%] px-3 py-2">Last 5 minutes</th>
+            <th className="px-4 py-2">Limits</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {HEALTH_FIELDS.map((f) => {
+            const finding = findings[f.field];
+            const value = truck[f.field];
+            const tone = finding ? (finding.level === 'critical' ? 'text-crit' : 'text-warn') : 'text-ink';
+            return (
+              <tr key={f.field} className="align-middle">
+                <td className="px-4 py-2 whitespace-nowrap">
+                  <div className="text-ink">{f.label}</div>
+                  <div className="text-xs text-faint">{f.field}</div>
+                </td>
+                <td className={`px-3 py-2 text-right whitespace-nowrap ${tone}`}>
+                  <span className="font-display text-lg font-semibold">{typeof value === 'number' ? value.toFixed(f.digits) : 'n/a'}</span>
+                  <span className="ml-1 text-[13px] text-muted">{f.unit}</span>
+                </td>
+                <td className="px-3 py-2 text-[13px] whitespace-nowrap">
+                  {finding ? (
+                    <span className={`font-medium ${tone}`}>
+                      {finding.name}, {finding.op} {finding.threshold} {finding.unit}
+                    </span>
+                  ) : (
+                    <span className="text-ok">Within limits</span>
+                  )}
+                </td>
+                <td className="px-3 py-1">
+                  <Sparkline points={points} field={f.field} unit={f.unit} digits={f.digits} rules={rules} label={f.label} />
+                </td>
+                <td className="px-4 py-2 text-xs text-muted">{thresholdSummary(rules, f.field)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Panel>
   );
 }
 
@@ -120,7 +137,7 @@ function MaintenanceTab({ truck, truckId }) {
 
       <Panel title={`Open alerts (${open.length})`} bodyClassName="">
         {open.length === 0 ? (
-          <p className="px-4 py-4 text-[15px] text-muted">No open alerts for this truck.</p>
+          <p className="px-4 py-4 text-sm text-muted">No open alerts for this truck.</p>
         ) : (
           <ul className="divide-y divide-line">
             {open.map((a) => (
@@ -160,7 +177,7 @@ function TripsTab({ truckId }) {
     <div className="space-y-4">
       <Panel title={`Detected trips (${own.length})`} bodyClassName="overflow-x-auto">
         {!trips ? (
-          <p className="px-4 py-4 text-[15px] text-muted">Loading trips…</p>
+          <p className="px-4 py-4 text-sm text-muted">Loading trips…</p>
         ) : (
           <TripTable trips={own} showTruck={false} empty="No trips detected for this truck yet." />
         )}
@@ -187,36 +204,87 @@ function TripsTab({ truckId }) {
   );
 }
 
-function Header({ truck, reg, truckId }) {
-  const { age, status } = useTruckStatus(truck ?? {});
+function Readout({ label, children }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div className="flex items-center gap-4">
-        <Plate truckId={truckId} size="lg" />
-        <div>
-          <div className="text-lg text-ink">{truck?.driver_name ?? reg?.driver_name ?? 'No driver assigned'}</div>
-          <div className="text-sm text-muted">
-            {[reg?.registration, reg?.model].filter(Boolean).join(', ') || 'No registration or model on file'}
+    <div className="min-w-0 bg-surface px-4 py-2.5">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-0.5 truncate text-sm text-ink">{children}</dd>
+    </div>
+  );
+}
+
+function Header({ truck, reg, truckId }) {
+  const { age, status, freshness } = useTruckStatus(truck ?? {});
+  const findings = truck?.findings ?? [];
+  const worst = findings.find((f) => f.level === 'critical') ?? findings[0];
+  return (
+    <div className="mb-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Plate truckId={truckId} size="lg" />
+          <div>
+            <h1 className="font-display text-[22px] leading-7 font-semibold tracking-tight text-ink">
+              {truck?.driver_name ?? reg?.driver_name ?? 'No driver assigned'}
+            </h1>
+            <p className="text-[13px] text-muted">
+              {[reg?.registration, reg?.model].filter(Boolean).join(', ') || (reg ? 'No registration or model on file' : 'Not in the fleet list')}
+            </p>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {truck ? (
+            <>
+              <StatusBadge status={status} />
+              <ProvenanceBadge kind={truck.provenance} />
+              <span className={`text-[13px] ${freshness === 'live' ? 'text-muted' : 'font-medium text-idle'}`}>Last seen {formatAgo(age)}</span>
+              <TriggerSosButton truckId={truckId} />
+            </>
+          ) : (
+            <span className="text-[13px] text-muted">No telemetry received yet</span>
+          )}
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        {truck ? (
-          <>
-            <StatusBadge status={status} />
-            <ProvenanceBadge kind={truck.provenance} />
-            <span className="text-sm text-muted">Last seen {formatAgo(age)}</span>
-            {truck.zones_inside?.length > 0 && (
-              <span className="text-sm text-muted">
-                In {truck.zones_inside.map((z) => z.zone_name).join(', ')}
+      {truck && (
+        <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-3 xl:grid-cols-6">
+          <Readout label="Speed">
+            <span className="font-medium">{formatNumber(truck.speed)}</span> km/h
+          </Readout>
+          <Readout label="Engine">
+            {engineText(truck)}
+            {typeof truck.rpm === 'number' && truck.rpm > 0 && <span className="text-muted">, {Math.round(truck.rpm)} rpm</span>}
+          </Readout>
+          <Readout label="Location">
+            <span className="flex items-center gap-1.5">
+              <span className="truncate">{locationText(truck)}</span>
+              {truck.position_source === 'virtual_route' && <ProvenanceBadge kind="VIRTUAL_POSITION" />}
+            </span>
+          </Readout>
+          <Readout label="Health">
+            {worst ? (
+              <span className={worst.level === 'critical' ? 'text-crit' : 'text-warn'}>
+                {worst.name}
+                {findings.length > 1 && <span className="text-muted"> +{findings.length - 1}</span>}
               </span>
+            ) : (
+              <span className="text-ok">Within limits</span>
             )}
-            <TriggerSosButton truckId={truckId} />
-          </>
-        ) : (
-          <span className="text-sm text-muted">No telemetry received yet</span>
-        )}
-      </div>
+          </Readout>
+          <Readout label="Fuel">
+            {truck.fuel ? (
+              <>
+                <span className="font-medium">{truck.fuel.level_pct.toFixed(0)} %</span>{' '}
+                <span className="text-muted">{truck.fuel.source === 'sensor' ? 'sensor' : 'estimate'}</span>
+              </>
+            ) : (
+              <span className="text-muted">No data</span>
+            )}
+          </Readout>
+          <Readout label="Maintenance risk, rule / ML">
+            <span className="font-medium">{truck.rule_risk_score ?? 0}</span>
+            <span className="text-muted"> / {typeof truck.ml_risk?.score === 'number' ? truck.ml_risk.score : '-'}</span>
+          </Readout>
+        </dl>
+      )}
     </div>
   );
 }
@@ -234,11 +302,11 @@ export default function VehicleDetails() {
 
   if (!truck && registry && !reg) {
     return (
-      <div className="mx-auto max-w-xl py-10 text-[15px]">
-        <h1 className="font-cond text-2xl font-bold">No truck {truckId}</h1>
+      <div className="mx-auto max-w-xl py-10 text-sm">
+        <h1 className="font-display text-[22px] font-semibold tracking-tight">No truck {truckId}</h1>
         <p className="mt-2 text-muted">
           It is not in the fleet list and has not reported. Check the ID, or add it on the{' '}
-          <Link to="/vehicles" className="text-ink underline underline-offset-4">
+          <Link to="/vehicles" className="font-medium text-accent hover:underline">
             Vehicles
           </Link>{' '}
           page.
@@ -248,17 +316,17 @@ export default function VehicleDetails() {
   }
 
   return (
-    <div className="mx-auto max-w-[1300px]">
-      <p className="mb-3 text-sm">
-        <Link to="/vehicles" className="text-muted hover:text-ink">
+    <div className="mx-auto max-w-[1440px]">
+      <nav aria-label="Breadcrumb" className="mb-3 text-[13px]">
+        <Link to="/vehicles" className="text-muted hover:text-ink hover:underline">
           Vehicles
         </Link>
-        <span className="text-faint"> / </span>
+        <span className="px-1.5 text-faint">/</span>
         <span className="text-ink">{truckId}</span>
-      </p>
+      </nav>
       <Header truck={truck} reg={reg} truckId={truckId} />
 
-      <div className="mt-5">
+      <div>
         <Tabs
           label="Vehicle views"
           value={tab}
@@ -275,7 +343,9 @@ export default function VehicleDetails() {
             (truck ? (
               <HealthTab truck={truck} points={points} />
             ) : (
-              <p className="text-[15px] text-muted">Live values appear here once this truck starts reporting.</p>
+              <Panel>
+                <p className="text-muted">Live values appear here once this truck starts reporting.</p>
+              </Panel>
             ))}
           {tab === 'maintenance' && <MaintenanceTab truck={truck} truckId={truckId} />}
           {tab === 'trips' && <TripsTab truckId={truckId} />}

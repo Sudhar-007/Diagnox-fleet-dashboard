@@ -6,7 +6,10 @@ import DrivingEvents from '../components/DrivingEvents.jsx';
 import Plate from '../components/Plate.jsx';
 import ProvenanceBadge from '../components/ProvenanceBadge.jsx';
 import Button from '../components/ui/Button.jsx';
-import Panel, { EmptyState } from '../components/ui/Panel.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
+import Panel, { EmptyState, LoadingState } from '../components/ui/Panel.jsx';
+import SearchInput from '../components/ui/SearchInput.jsx';
+import { toast } from '../lib/toast.js';
 import { sendJson } from '../lib/api.js';
 import { EVENT_LABEL, deductionText, driverRows, scoreTone } from '../lib/driving.js';
 import { formatDuration } from '../lib/format.js';
@@ -21,6 +24,7 @@ function RemoveDriver({ driver, onRemoved }) {
     try {
       await sendJson(`/api/registry/drivers/${encodeURIComponent(driver.driver_id)}`, 'DELETE');
       await reloadRegistry();
+      toast(`${driver.name} removed`);
       onRemoved?.();
     } catch (err) {
       setError(err.message);
@@ -49,7 +53,7 @@ function RemoveDriver({ driver, onRemoved }) {
 
 function Score({ value, note }) {
   if (value == null) return <span className="text-faint">{note ?? 'No rated trip yet'}</span>;
-  return <span className={`font-cond text-lg font-bold ${scoreTone(value)}`}>{value}</span>;
+  return <span className={`font-display text-base font-semibold ${scoreTone(value)}`}>{value}</span>;
 }
 
 function countsText(counts) {
@@ -98,14 +102,14 @@ function DriverTrips({ trips }) {
   if (trips.length === 0) return <EmptyState>No trips for this driver since the server started.</EmptyState>;
   return (
     <table className="w-full min-w-[760px] text-left text-sm">
-      <thead className="border-b border-line text-muted">
+      <thead className="border-b border-line">
         <tr>
-          <th className="px-4 py-2 font-normal">Started</th>
-          <th className="px-4 py-2 font-normal">Truck</th>
-          <th className="px-4 py-2 font-normal">Duration, distance</th>
-          <th className="px-4 py-2 font-normal">Score</th>
-          <th className="px-4 py-2 font-normal">Points lost for</th>
-          <th className="px-4 py-2 font-normal">
+          <th className="px-4 py-2">Started</th>
+          <th className="px-4 py-2">Truck</th>
+          <th className="px-4 py-2">Duration, distance</th>
+          <th className="px-4 py-2">Score</th>
+          <th className="px-4 py-2">Points lost for</th>
+          <th className="px-4 py-2">
             <span className="sr-only">Replay</span>
           </th>
         </tr>
@@ -135,7 +139,7 @@ function DriverTrips({ trips }) {
                 {t.has_path !== false && (
                   <Link
                     to={`/trips?tab=replay&trip=${encodeURIComponent(t.id)}`}
-                    className="text-ink underline decoration-line underline-offset-4 hover:decoration-ink"
+                    className="font-medium text-accent hover:underline"
                   >
                     Replay
                   </Link>
@@ -157,56 +161,67 @@ export default function Drivers() {
   const [params, setParams] = useSearchParams();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [query, setQuery] = useState('');
 
   const rows = useMemo(() => driverRows(registry?.drivers, trips, events), [registry, trips, events]);
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? rows.filter((r) => [r.driver.name, r.driver.truck_id, r.driver.phone, r.driver.licence_no].some((v) => v && v.toLowerCase().includes(q)))
+    : rows;
   const selected = rows.find((r) => r.driver.driver_id === params.get('driver')) ?? null;
   const pick = (id) => setParams(id ? { driver: id } : {}, { replace: true });
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h1 className="font-cond text-2xl font-bold">Drivers</h1>
-        <p className="flex items-center gap-2 text-sm text-muted">
-          Driving scores <ProvenanceBadge kind="RULE_BASED" /> from speed and rpm readings
-        </p>
-      </div>
-
-      <Panel
-        title={`Fleet drivers (${rows.length})`}
-        bodyClassName="overflow-x-auto"
+    <div className="mx-auto max-w-[1440px] space-y-4">
+      <PageHeader
+        title="Drivers"
+        description={
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            Driving scores <ProvenanceBadge kind="RULE_BASED" /> from speed and rpm readings. Select a driver to see their trips and events.
+          </span>
+        }
         actions={
           !adding && (
-            <Button variant="primary" onClick={() => setAdding(true)}>
+            <Button variant="primary" size="md" onClick={() => setAdding(true)}>
               Add driver
             </Button>
           )
         }
+      />
+
+      {adding && (
+        <Panel title="Add driver">
+          <DriverForm onDone={() => setAdding(false)} />
+        </Panel>
+      )}
+
+      <Panel
+        title={`Fleet drivers (${rows.length})`}
+        bodyClassName="overflow-x-auto"
+        actions={<SearchInput value={query} onChange={setQuery} label="Search drivers" placeholder="Name, truck, phone" className="w-56" />}
       >
-        {adding && (
-          <div className="border-b border-line p-4">
-            <DriverForm onDone={() => setAdding(false)} />
-          </div>
-        )}
         {!registry ? (
-          <EmptyState>Loading drivers…</EmptyState>
+          <LoadingState>Loading drivers…</LoadingState>
         ) : rows.length === 0 ? (
           <EmptyState>No drivers yet. Use Add driver to enter one and put them on a truck.</EmptyState>
+        ) : shown.length === 0 ? (
+          <EmptyState action={<Button onClick={() => setQuery('')}>Clear search</Button>}>No driver matches "{query.trim()}".</EmptyState>
         ) : (
           <table className="w-full min-w-[860px] text-left text-sm">
-            <thead className="border-b border-line text-muted">
+            <thead className="border-b border-line">
               <tr>
-                <th className="px-4 py-2 font-normal">Driver</th>
-                <th className="px-4 py-2 font-normal">Truck</th>
-                <th className="px-4 py-2 font-normal">Score</th>
-                <th className="px-4 py-2 font-normal">Current trip</th>
-                <th className="px-4 py-2 font-normal">Events</th>
-                <th className="px-4 py-2 font-normal">
+                <th className="px-4 py-2">Driver</th>
+                <th className="px-4 py-2">Truck</th>
+                <th className="px-4 py-2">Score</th>
+                <th className="px-4 py-2">Current trip</th>
+                <th className="px-4 py-2">Events</th>
+                <th className="px-4 py-2">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {rows.map((r) => {
+              {shown.map((r) => {
                 const d = r.driver;
                 const isSelected = selected?.driver.driver_id === d.driver_id;
                 if (editing === d.driver_id) {
@@ -219,12 +234,12 @@ export default function Drivers() {
                   );
                 }
                 return (
-                  <tr key={d.driver_id} className={`align-top ${isSelected ? 'bg-asphalt' : ''}`}>
+                  <tr key={d.driver_id} className={`align-top ${isSelected ? 'bg-accent/5' : ''}`}>
                     <td className="px-4 py-2.5">
                       <button
                         type="button"
                         onClick={() => pick(isSelected ? null : d.driver_id)}
-                        className="text-left text-ink underline decoration-line underline-offset-4 hover:decoration-ink"
+                        className="text-left font-medium text-ink hover:text-accent hover:underline"
                         aria-pressed={isSelected}
                       >
                         {d.name}

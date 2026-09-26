@@ -5,6 +5,7 @@ import Field from './ui/Field.jsx';
 import { rememberName, rememberedName, sendJson } from '../lib/api.js';
 import { reloadRegistry } from '../hooks/useSocket.js';
 import { useFleetStore } from '../store/useFleetStore.js';
+import { toast } from '../lib/toast.js';
 
 const today = () => {
   const d = new Date();
@@ -45,6 +46,7 @@ export default function ServiceRecordForm({ truckId = null, onDone }) {
       });
       if (form.by.trim()) rememberName(form.by.trim());
       await reloadRegistry();
+      toast(`Service record saved for ${form.truck_id}`);
       onDone?.();
     } catch (err) {
       setError(err.message);
@@ -86,7 +88,7 @@ export default function ServiceRecordForm({ truckId = null, onDone }) {
         <Button type="submit" variant="primary" disabled={saving}>
           {saving ? 'Saving…' : 'Add service record'}
         </Button>
-        <Button variant="quiet" onClick={onDone} disabled={saving}>
+        <Button variant="quiet" onClick={() => onDone?.()} disabled={saving}>
           Cancel
         </Button>
         {error && (

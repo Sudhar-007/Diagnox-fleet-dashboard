@@ -3,6 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 
 import AlertRow from '../components/AlertRow.jsx';
 import Plate from '../components/Plate.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
+import Segmented from '../components/ui/Segmented.jsx';
+import Stat from '../components/ui/Stat.jsx';
 import Tabs, { TabPanel } from '../components/ui/Tabs.jsx';
 import Panel, { EmptyState } from '../components/ui/Panel.jsx';
 import { byUrgency, eventDescription, isOpen, resolutionText, ruleReading } from '../lib/alerts.js';
@@ -11,40 +14,37 @@ import { useFleetStore } from '../store/useFleetStore.js';
 
 const LEVEL_FILTERS = [
   { id: 'all', label: 'All' },
+  { id: 'sos', label: 'SOS' },
   { id: 'critical', label: 'Critical' },
   { id: 'warning', label: 'Warning' },
 ];
 
+const matches = (a, level) => level === 'all' || (level === 'sos' ? a.kind === 'sos' : a.kind !== 'sos' && a.level === level);
+
 function ActiveTab({ alerts }) {
   const [level, setLevel] = useState('all');
   const sosCount = alerts.filter((a) => a.kind === 'sos').length;
-  const shown = alerts.filter((a) => level === 'all' || a.level === level);
+  const shown = alerts.filter((a) => matches(a, level));
 
   return (
     <Panel
       bodyClassName=""
       title={`${alerts.length} open${sosCount ? `, including ${sosCount} SOS` : ''}`}
+      description="SOS first, then critical, then newest. Acknowledge to show someone is on it; resolve when it is handled."
       actions={
-        <div className="flex gap-1" role="group" aria-label="Filter by level">
-          {LEVEL_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              aria-pressed={level === f.id}
-              onClick={() => setLevel(f.id)}
-              className={`rounded-[4px] px-2.5 py-1 text-sm ${level === f.id ? 'bg-panel-hi text-ink' : 'text-muted hover:text-ink'}`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Filter by level"
+          value={level}
+          onChange={setLevel}
+          options={LEVEL_FILTERS.map((f) => ({ ...f, count: alerts.filter((a) => matches(a, f.id)).length }))}
+        />
       }
     >
       {shown.length === 0 ? (
         <EmptyState>
           {alerts.length === 0
             ? 'No open alerts or SOS. Every truck is within its health thresholds and zones.'
-            : `No ${level} alerts open.`}
+            : `No ${level === 'sos' ? 'SOS' : `${level} alerts`} open.`}
         </EmptyState>
       ) : (
         <ul className="divide-y divide-line">
@@ -68,12 +68,12 @@ function EventLogTab({ events }) {
   return (
     <Panel bodyClassName="overflow-x-auto">
       <table className="w-full min-w-[640px] text-left text-sm">
-        <thead className="border-b border-line text-muted">
+        <thead className="border-b border-line">
           <tr>
-            <th className="px-4 py-2 font-normal">Time</th>
-            <th className="px-4 py-2 font-normal">Truck</th>
-            <th className="px-4 py-2 font-normal">Event</th>
-            <th className="px-4 py-2 font-normal">Note</th>
+            <th className="px-4 py-2">Time</th>
+            <th className="px-4 py-2">Truck</th>
+            <th className="px-4 py-2">Event</th>
+            <th className="px-4 py-2">Note</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
@@ -112,29 +112,20 @@ function ResponseHistoryTab({ resolved }) {
 
   return (
     <div className="space-y-4">
-      <dl className="flex flex-wrap gap-x-8 gap-y-2 text-[15px]">
-        <div>
-          <dt className="text-sm text-muted">Resolved</dt>
-          <dd className="font-cond text-2xl font-bold">{resolved.length}</dd>
-        </div>
-        <div>
-          <dt className="text-sm text-muted">Average time to acknowledge</dt>
-          <dd className="font-cond text-2xl font-bold">{avgAck != null ? formatDuration(avgAck) : 'None yet'}</dd>
-        </div>
-        <div>
-          <dt className="text-sm text-muted">Average time to resolve</dt>
-          <dd className="font-cond text-2xl font-bold">{formatDuration(avgResolve)}</dd>
-        </div>
+      <dl className="flex flex-wrap gap-x-10 gap-y-3 rounded-lg border border-line bg-surface px-4 py-3">
+        <Stat label="Resolved" value={resolved.length} />
+        <Stat label="Average time to acknowledge" value={avgAck != null ? formatDuration(avgAck) : 'None yet'} />
+        <Stat label="Average time to resolve" value={formatDuration(avgResolve)} />
       </dl>
       <Panel bodyClassName="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-sm">
-          <thead className="border-b border-line text-muted">
+          <thead className="border-b border-line">
             <tr>
-              <th className="px-4 py-2 font-normal">Alert</th>
-              <th className="px-4 py-2 font-normal">Opened</th>
-              <th className="px-4 py-2 font-normal">Acknowledged</th>
-              <th className="px-4 py-2 font-normal">Resolved</th>
-              <th className="px-4 py-2 font-normal">How</th>
+              <th className="px-4 py-2">Alert</th>
+              <th className="px-4 py-2">Opened</th>
+              <th className="px-4 py-2">Acknowledged</th>
+              <th className="px-4 py-2">Resolved</th>
+              <th className="px-4 py-2">How</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -193,15 +184,13 @@ export default function Alerts() {
   );
 
   return (
-    <div className="mx-auto max-w-[1200px]">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h1 className="font-cond text-2xl font-bold">Alerts &amp; SOS</h1>
-        <p className="text-sm text-muted">
-          Health rules are demo-tuned thresholds, not validated limits. Change them in Settings.
-        </p>
-      </div>
+    <div className="mx-auto max-w-[1440px]">
+      <PageHeader
+        title="Alerts & SOS"
+        description="Health, zone and SOS alerts across the fleet. Health thresholds are demo-tuned, not validated limits; change them in Settings."
+      />
 
-      <div className="mt-4">
+      <div>
         <Tabs
           label="Alert views"
           value={tab}

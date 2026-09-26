@@ -5,12 +5,14 @@ import Field from './ui/Field.jsx';
 import { sendJson } from '../lib/api.js';
 import { reloadRegistry } from '../hooks/useSocket.js';
 import { useFleetStore } from '../store/useFleetStore.js';
+import { toast } from '../lib/toast.js';
 
-// Add a truck, or edit one (truck_id is fixed once created).
-export default function TruckForm({ truck = null, onDone }) {
+// Add a truck, or edit one (truck_id is fixed once created). onDone(truckId) after a save,
+// onDone() on cancel.
+export default function TruckForm({ truck = null, initialId = '', onDone }) {
   const registry = useFleetStore((s) => s.registry);
   const [form, setForm] = useState({
-    truck_id: truck?.truck_id ?? '',
+    truck_id: truck?.truck_id ?? initialId,
     registration: truck?.registration ?? '',
     model: truck?.model ?? '',
     tank_capacity_l: truck?.tank_capacity_l ?? 300,
@@ -37,7 +39,8 @@ export default function TruckForm({ truck = null, onDone }) {
       if (truck) await sendJson(`/api/registry/trucks/${encodeURIComponent(truck.truck_id)}`, 'PUT', body);
       else await sendJson('/api/registry/trucks', 'POST', { ...body, truck_id: form.truck_id });
       await reloadRegistry();
-      onDone?.();
+      toast(truck ? `${truck.truck_id} saved` : `${form.truck_id} added to the fleet list`);
+      onDone?.(truck ? truck.truck_id : form.truck_id);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -80,7 +83,7 @@ export default function TruckForm({ truck = null, onDone }) {
         <Button type="submit" variant="primary" disabled={saving}>
           {saving ? 'Saving…' : truck ? 'Save changes' : 'Add truck'}
         </Button>
-        <Button variant="quiet" onClick={onDone} disabled={saving}>
+        <Button variant="quiet" onClick={() => onDone?.()} disabled={saving}>
           Cancel
         </Button>
         {error && (

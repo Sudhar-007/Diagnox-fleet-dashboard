@@ -17,8 +17,8 @@ import { useSocket } from './hooks/useSocket.js';
 
 function ConfigProblem({ problem }) {
   return (
-    <main className="mx-auto max-w-xl px-4 py-16 text-[15px]">
-      <h1 className="font-cond text-2xl font-bold">
+    <main className="mx-auto max-w-xl px-4 py-16 text-sm">
+      <h1 className="font-display text-[22px] font-semibold tracking-tight">
         {problem === 'missing' ? 'Backend URL not set' : 'Backend URL must use HTTPS'}
       </h1>
       <p className="mt-2 text-muted">

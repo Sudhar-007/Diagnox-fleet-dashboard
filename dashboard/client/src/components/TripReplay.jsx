@@ -126,15 +126,15 @@ export default function TripReplay({ tripId }) {
     return () => clearInterval(id);
   }, [playing, speed, data]);
 
-  if (loading) return <p className="text-[15px] text-muted">Loading the trip…</p>;
-  if (error) return <p className="text-[15px] text-crit">{error}</p>;
+  if (loading) return <p className="text-sm text-muted">Loading the trip…</p>;
+  if (error) return <p className="text-sm text-crit">{error}</p>;
   if (!data || data.rows.length === 0) {
-    return <p className="text-[15px] text-muted">This trip's path is no longer kept (only the newest paths are stored).</p>;
+    return <p className="text-sm text-muted">This trip's path is no longer kept (only the newest paths are stored).</p>;
   }
 
   const { col, rows, times, positions, km, chart, alertMarks, drawn, icon } = data;
   if (drawn.length === 0) {
-    return <p className="text-[15px] text-muted">No GPS fix was received during this trip, so there is no path to replay.</p>;
+    return <p className="text-sm text-muted">No GPS fix was received during this trip, so there is no path to replay.</p>;
   }
   // A reloaded running trip can come back shorter (it ended where the truck stopped).
   const i = Math.min(idx, rows.length - 1);
@@ -155,7 +155,7 @@ export default function TripReplay({ tripId }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[15px]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <Plate truckId={trip.truck_id} size="sm" />
         <span className="text-ink">{trip.driver_name}</span>
         <span className="text-muted">
@@ -175,8 +175,8 @@ export default function TripReplay({ tripId }) {
           <MapContainer className="h-full w-full" center={here} zoom={13}>
             <TileLayer url={TILE_URL} attribution={ATTRIBUTION} maxZoom={19} />
             <FitPath positions={drawn} tripId={tripId} />
-            <Polyline positions={drawn} pathOptions={{ color: themeColor('muted'), weight: 3, opacity: 0.6, dashArray: '4 6' }} interactive={false} />
-            <Polyline positions={travelled} pathOptions={{ color: themeColor('ink'), weight: 4, opacity: 0.9 }} interactive={false} />
+            <Polyline positions={drawn} pathOptions={{ color: themeColor('accent'), weight: 5, opacity: 0.3 }} interactive={false} />
+            <Polyline positions={travelled} pathOptions={{ color: themeColor('accent'), weight: 5, opacity: 0.95 }} interactive={false} />
             {alertMarks.map((a) =>
               positions[a.index] ? (
                 <CircleMarker
@@ -194,17 +194,17 @@ export default function TripReplay({ tripId }) {
           </MapContainer>
         </div>
 
-        <dl className="grid content-start gap-x-4 gap-y-2 rounded-md border border-line bg-panel p-4 text-[15px] sm:grid-cols-[auto_1fr] lg:grid-cols-1">
+        <dl className="grid content-start gap-x-4 gap-y-2 rounded-md border border-line bg-surface p-4 text-sm sm:grid-cols-[auto_1fr] lg:grid-cols-1">
           {readout.map(([k, v]) => (
             <div key={k}>
               <dt className="text-sm text-muted">{k}</dt>
-              <dd className="font-cond text-xl font-semibold text-ink">{v}</dd>
+              <dd className="font-display text-xl font-semibold text-ink">{v}</dd>
             </div>
           ))}
         </dl>
       </div>
 
-      <div className="rounded-md border border-line bg-panel p-4">
+      <div className="rounded-md border border-line bg-surface p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="primary" onClick={() => (i >= rows.length - 1 ? (setIdx(0), setPlaying(true)) : setPlaying((p) => !p))}>
             {playing ? 'Pause' : i >= rows.length - 1 ? 'Play again' : 'Play'}
@@ -216,7 +216,7 @@ export default function TripReplay({ tripId }) {
                 type="button"
                 aria-pressed={speed === s}
                 onClick={() => setSpeed(s)}
-                className={`rounded-[4px] px-2 py-1 text-sm ${speed === s ? 'bg-panel-hi text-ink' : 'text-muted hover:text-ink'}`}
+                className={`rounded-[4px] px-2 py-1 text-sm ${speed === s ? 'bg-subtle text-ink' : 'text-muted hover:text-ink'}`}
               >
                 {s}x
               </button>
@@ -255,8 +255,8 @@ export default function TripReplay({ tripId }) {
       </div>
 
       {alertMarks.length > 0 && (
-        <div className="rounded-md border border-line bg-panel p-4">
-          <h3 className="text-[15px] font-medium text-ink">Alerts during this trip</h3>
+        <div className="rounded-md border border-line bg-surface p-4">
+          <h3 className="text-sm font-medium text-ink">Alerts during this trip</h3>
           <ul className="mt-2 space-y-1 text-sm">
             {alertMarks.map((a) => (
               <li key={a.id}>

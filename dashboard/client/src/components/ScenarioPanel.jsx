@@ -24,8 +24,8 @@ function writeOpen(open) {
 }
 
 function ScenarioRow({ scenario, truckIds, onRun, running }) {
-  const [truck, setTruck] = useState(scenario.default_truck);
-  const run = running.find((r) => r.truck_id === truck && r.id === scenario.id);
+  const [truck, setTruck] = useState(scenario.default_truck ?? '');
+  const run = running.find((r) => r.id === scenario.id && (truck === '' || r.truck_id === truck));
   const now = useFleetStore((s) => s.now);
   const clockOffsetMs = useFleetStore((s) => s.clockOffsetMs);
   const left = run ? Math.max(0, Math.round((run.ends_ms - (now + clockOffsetMs)) / 1000)) : null;
@@ -33,7 +33,7 @@ function ScenarioRow({ scenario, truckIds, onRun, running }) {
   return (
     <li className="px-3 py-2.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[15px] text-ink">{scenario.label}</span>
+        <span className="text-sm text-ink">{scenario.label}</span>
         <div className="flex items-center gap-2">
           <label className="sr-only" htmlFor={`sc-${scenario.id}`}>
             Truck for {scenario.label}
@@ -42,16 +42,24 @@ function ScenarioRow({ scenario, truckIds, onRun, running }) {
             id={`sc-${scenario.id}`}
             value={truck}
             onChange={(e) => setTruck(e.target.value)}
-            className="rounded-[4px] border border-line bg-asphalt px-1.5 py-1 text-sm text-ink"
+            className="rounded-[4px] border border-line-strong bg-surface px-1.5 py-1 text-sm text-ink"
           >
+            {scenario.default_truck == null && <option value="">Nearest truck</option>}
             {truckIds.map((id) => (
               <option key={id}>{id}</option>
             ))}
           </select>
-          <Button onClick={() => onRun(scenario.id, truck)}>{run ? `Running, ${left} s` : 'Run'}</Button>
+          <Button onClick={() => onRun(scenario.id, truck || undefined)}>
+            {run ? `Running, ${left >= 120 ? `${Math.ceil(left / 60)} min` : `${left} s`}` : 'Run'}
+          </Button>
         </div>
       </div>
-      <p className="mt-1 text-sm text-muted">{scenario.description}</p>
+      <p className="mt-1 text-[13px] text-muted">{scenario.description}</p>
+      {run?.note && (
+        <p className="mt-1 text-[13px] font-medium text-ink">
+          {run.truck_id}: {run.note}
+        </p>
+      )}
     </li>
   );
 }
@@ -144,11 +152,11 @@ export default function ScenarioPanel() {
   return (
     <aside
       aria-label="Demo scenarios"
-      className="fixed right-3 bottom-3 z-[1000] flex max-h-[70vh] w-[min(24rem,calc(100vw-1.5rem))] flex-col rounded-md border border-line bg-panel"
+      className="fixed right-3 bottom-3 z-[1000] flex max-h-[70vh] w-[min(24rem,calc(100vw-1.5rem))] flex-col rounded-lg border border-line bg-surface shadow-[0_4px_16px_rgb(28_34_43/0.14)]"
     >
       <header className={`flex items-center justify-between gap-2 px-3 py-2 ${minimized ? '' : 'border-b border-line'}`}>
         <div>
-          <h2 className="text-[15px] font-medium text-ink">Demo scenarios</h2>
+          <h2 className="text-sm font-medium text-ink">Demo scenarios</h2>
           {!minimized && <p className="text-xs text-muted">Simulated trucks only. Each one ends by itself.</p>}
           {minimized && data?.running?.length > 0 && (
             <p className="text-xs text-muted">{data.running.length} running</p>

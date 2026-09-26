@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Button from './ui/Button.jsx';
 import Field from './ui/Field.jsx';
 import { rememberName, rememberedName, sendJson } from '../lib/api.js';
+import { toast } from '../lib/toast.js';
 import { queueAlertChange } from '../store/useFleetStore.js';
 
 const ACTIONS = {
@@ -37,6 +38,7 @@ export default function AlertActions({ alert }) {
       });
       if (by.trim()) rememberName(by.trim());
       queueAlertChange(change);
+      toast(`${alert.kind === 'sos' ? 'SOS' : alert.name} on ${alert.truck_id} ${mode === 'RESOLVED' ? 'resolved' : 'acknowledged'}`);
       setMode(null);
       setNote('');
     } catch (err) {
@@ -49,7 +51,11 @@ export default function AlertActions({ alert }) {
   if (!mode) {
     return (
       <div className="mt-2.5 flex gap-2">
-        {alert.status === 'ACTIVE' && <Button onClick={() => open('ACKNOWLEDGED')}>Acknowledge</Button>}
+        {alert.status === 'ACTIVE' && (
+          <Button variant={alert.kind === 'sos' ? 'danger' : 'primary'} onClick={() => open('ACKNOWLEDGED')}>
+            Acknowledge
+          </Button>
+        )}
         <Button onClick={() => open('RESOLVED')}>Resolve</Button>
       </div>
     );
@@ -57,7 +63,7 @@ export default function AlertActions({ alert }) {
 
   const action = ACTIONS[mode];
   return (
-    <form onSubmit={submit} className="mt-3 grid gap-3 rounded-[4px] border border-line bg-asphalt/40 p-3 sm:grid-cols-[1fr_14rem]">
+    <form onSubmit={submit} className="mt-3 grid gap-3 rounded-md border border-line bg-canvas p-3 sm:grid-cols-[1fr_14rem]">
       <Field
         as="textarea"
         label="Note (optional)"
@@ -73,6 +79,12 @@ export default function AlertActions({ alert }) {
         maxLength={60}
         autoComplete="name"
       />
+      {mode === 'RESOLVED' && (
+        <p className="text-[13px] text-muted sm:col-span-2">
+          Resolving closes the alert. If the reading or position is still out of limits, it stays quiet until it has
+          recovered, then alerts again on the next breach.
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
         <Button type="submit" variant="primary" disabled={saving}>
           {saving ? 'Saving…' : action.verb}

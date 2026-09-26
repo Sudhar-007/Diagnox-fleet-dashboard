@@ -14,18 +14,21 @@ import {
 } from 'recharts';
 
 import ProvenanceBadge from '../components/ProvenanceBadge.jsx';
-import Panel from '../components/ui/Panel.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
+import Panel, { ErrorState, LoadingState } from '../components/ui/Panel.jsx';
+import Segmented from '../components/ui/Segmented.jsx';
 import { API_URL } from '../config.js';
 import { timeoutSignal } from '../lib/api.js';
 import { formatDuration } from '../lib/format.js';
 import { themeColor } from '../lib/theme.js';
 import { useFleetStore } from '../store/useFleetStore.js';
 
-// Categorical series colours, validated for the dark panel surface (#222933): lightness band,
-// colour-blind separation between neighbours and 3:1 contrast. Green and red are left out
+// Categorical series colours for the white surface, validated (lightness band, chroma,
+// colour-blind separation between neighbours). Aqua, yellow and magenta sit below 3:1 on
+// white, so every chart keeps its "Show the numbers" table. Green and red are left out
 // because they mean ok and critical elsewhere. A sixth series and beyond is "Other" (gray).
-const SERIES = ['#3987e5', '#199e70', '#c98500', '#d55181', '#9085e9'];
-const OTHER = '#5f6a79';
+const SERIES = ['#2a78d6', '#1baf7a', '#eda100', '#e87ba4', '#4a3aa7'];
+const OTHER = '#8a939e';
 const SINGLE = SERIES[0];
 
 const RANGES = [
@@ -40,8 +43,14 @@ const axisTick = () => ({ fill: themeColor('muted'), fontSize: 11 });
 
 function tooltipProps() {
   return {
-    cursor: { fill: 'rgba(255,255,255,0.04)', stroke: themeColor('line') },
-    contentStyle: { background: themeColor('panel-hi'), border: `1px solid ${themeColor('line')}`, borderRadius: 4, fontSize: 12 },
+    cursor: { fill: 'rgba(28,34,43,0.04)', stroke: themeColor('line') },
+    contentStyle: {
+      background: themeColor('surface'),
+      border: `1px solid ${themeColor('line')}`,
+      borderRadius: 6,
+      fontSize: 12,
+      boxShadow: '0 2px 8px rgba(28,34,43,0.12)',
+    },
     labelStyle: { color: themeColor('ink'), marginBottom: 2 },
     itemStyle: { color: themeColor('ink'), padding: 0 },
   };
@@ -56,7 +65,7 @@ const legendProps = () => ({
 });
 
 function Empty() {
-  return <p className="flex h-48 items-center justify-center text-[15px] text-muted">Not enough data yet</p>;
+  return <p className="flex h-48 items-center justify-center text-sm text-muted">Not enough data in this range yet</p>;
 }
 
 // One chart: title, optional badge, the chart, its source caption and its numbers as a table.
@@ -84,7 +93,7 @@ function ChartPanel({ title, badge, caption, empty, table, children }) {
 function DataTable({ head, rows }) {
   return (
     <table className="w-full text-left text-sm">
-      <thead className="border-b border-line text-muted">
+      <thead className="border-b border-line">
         <tr>
           {head.map((h) => (
             <th key={h} className="px-2 py-1.5 font-normal">
@@ -152,7 +161,7 @@ function AlertsChart({ data, caption }) {
               dataKey={k}
               stackId="a"
               fill={k === 'Other' ? OTHER : SERIES[i]}
-              stroke={themeColor('panel')}
+              stroke={themeColor('surface')}
               strokeWidth={2}
               radius={i === keys.length - 1 ? [4, 4, 0, 0] : 0}
               maxBarSize={56}
@@ -214,7 +223,7 @@ function RiskChart({ risk, caption, truckIds }) {
               stroke={color(s.truck_id)}
               strokeWidth={2}
               dot={false}
-              activeDot={{ r: 4, stroke: themeColor('panel'), strokeWidth: 2 }}
+              activeDot={{ r: 4, stroke: themeColor('surface'), strokeWidth: 2 }}
               connectNulls
               isAnimationActive={false}
             />
@@ -324,8 +333,8 @@ function CostChart({ costs, caption }) {
           <YAxis tick={axisTick()} axisLine={false} tickLine={false} tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
           <Tooltip {...tooltipProps()} formatter={(v, name) => [rupees(v), name]} />
           <Legend {...legendProps()} />
-          <Bar dataKey="Service" stackId="c" fill={SERIES[0]} stroke={themeColor('panel')} strokeWidth={2} maxBarSize={48} isAnimationActive={false} />
-          <Bar dataKey="Refuel" stackId="c" fill={SERIES[1]} stroke={themeColor('panel')} strokeWidth={2} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false} />
+          <Bar dataKey="Service" stackId="c" fill={SERIES[0]} stroke={themeColor('surface')} strokeWidth={2} maxBarSize={48} isAnimationActive={false} />
+          <Bar dataKey="Refuel" stackId="c" fill={SERIES[1]} stroke={themeColor('surface')} strokeWidth={2} radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     </ChartPanel>
@@ -370,43 +379,34 @@ export default function Analytics() {
   const r = RANGES.find((x) => x.id === range);
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-cond text-2xl font-bold">Analytics</h1>
-          {data?.to_ms != null && (
-            <p className="text-sm text-muted">
-              Readings from {clock(data.from_ms)} to {clock(data.to_ms)}, refreshed every {REFRESH_MS / 1000} s.
-            </p>
-          )}
-        </div>
-        <div role="radiogroup" aria-label="Time range" className="inline-flex rounded-md border border-line bg-panel p-0.5">
-          {RANGES.map((x) => (
-            <button
-              key={x.id}
-              type="button"
-              role="radio"
-              aria-checked={range === x.id}
-              onClick={() => setRange(x.id)}
-              className={`rounded-[4px] px-3 py-1.5 text-sm ${range === x.id ? 'bg-panel-hi text-ink' : 'text-muted hover:text-ink'}`}
-            >
-              {x.label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="mx-auto max-w-[1440px] space-y-4">
+      <PageHeader
+        title="Analytics"
+        description={
+          data?.to_ms != null
+            ? `Readings from ${clock(data.from_ms)} to ${clock(data.to_ms)}, refreshed every ${REFRESH_MS / 1000} s.`
+            : 'Fleet trends from the readings the server holds.'
+        }
+        actions={<Segmented label="Time range" value={range} onChange={setRange} options={RANGES} />}
+      />
 
-      {error && <p className="text-sm text-crit">{error}</p>}
+      {error && (
+        <Panel bodyClassName="">
+          <ErrorState>{error}</ErrorState>
+        </Panel>
+      )}
       {!data ? (
-        <p className="text-[15px] text-muted">Loading analytics…</p>
+        <Panel bodyClassName="">
+          <LoadingState>Loading analytics…</LoadingState>
+        </Panel>
       ) : (
         <>
-          <div className="grid gap-5 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <AlertsChart data={data.alerts} caption={r.caption} />
             <RiskChart risk={data.risk} caption={r.caption} truckIds={truckIds} />
           </div>
           <TripCharts trips={data.trips} caption={r.caption} />
-          <div className="grid gap-5 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <DriverChart drivers={data.drivers} caption={r.caption} />
             <FuelChart fuel={data.fuel} caption={r.caption} />
           </div>

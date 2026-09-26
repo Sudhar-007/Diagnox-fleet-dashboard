@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import Button from './ui/Button.jsx';
 import { rememberedName, sendJson } from '../lib/api.js';
+import { toast } from '../lib/toast.js';
 import { queueAlertChange, useFleetStore } from '../store/useFleetStore.js';
 
 // Manual SOS with a confirm step, so it cannot be raised by a stray click.
@@ -13,7 +14,7 @@ export default function TriggerSosButton({ truckId }) {
     Object.values(s.alerts).some((a) => a.kind === 'sos' && a.truck_id === truckId && a.status !== 'RESOLVED'),
   );
 
-  if (hasOpen) return <p className="text-sm text-crit">SOS open for this truck</p>;
+  if (hasOpen) return <p className="text-[13px] font-medium text-crit">SOS open for this truck</p>;
 
   const raise = async () => {
     setBusy(true);
@@ -22,6 +23,7 @@ export default function TriggerSosButton({ truckId }) {
       const by = rememberedName().trim() || undefined;
       queueAlertChange(await sendJson(`/api/trucks/${encodeURIComponent(truckId)}/sos`, 'POST', { by }));
       setConfirming(false);
+      toast(`SOS raised for ${truckId}`, 'warn');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -31,14 +33,14 @@ export default function TriggerSosButton({ truckId }) {
 
   if (!confirming) {
     return (
-      <Button variant="default" onClick={() => setConfirming(true)} className="border-crit/60 text-crit">
+      <Button variant="dangerOutline" onClick={() => setConfirming(true)}>
         Trigger SOS
       </Button>
     );
   }
   return (
     <div className="space-y-1.5">
-      <p className="text-sm text-ink">Raise an SOS for {truckId}?</p>
+      <p className="text-[13px] text-ink">Raise an SOS for {truckId}? Every open dashboard shows the SOS banner until someone acknowledges it.</p>
       <div className="flex gap-2">
         <Button variant="danger" onClick={raise} disabled={busy}>
           {busy ? 'Raising…' : 'Raise SOS'}
@@ -47,7 +49,7 @@ export default function TriggerSosButton({ truckId }) {
           Cancel
         </Button>
       </div>
-      {error && <p className="text-sm text-crit">{error}</p>}
+      {error && <p className="text-[13px] text-crit">{error}</p>}
     </div>
   );
 }

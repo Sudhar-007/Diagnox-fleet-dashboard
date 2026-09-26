@@ -169,8 +169,11 @@ function TruckLayer({ truck, trail, selected, onSelect, compact }) {
                 </dd>
               </dl>
               <div className="flex items-center justify-between gap-2">
-                <ProvenanceBadge kind={truck.provenance} />
-                <Link to={`/vehicles/${encodeURIComponent(truck.truck_id)}`} className="text-sm text-ink underline underline-offset-4">
+                <span className="flex gap-1">
+                  <ProvenanceBadge kind={truck.provenance} />
+                  {truck.position_source === 'virtual_route' && <ProvenanceBadge kind="VIRTUAL_POSITION" />}
+                </span>
+                <Link to={`/vehicles/${encodeURIComponent(truck.truck_id)}`} className="text-[13px] font-medium text-accent hover:underline">
                   Open vehicle
                 </Link>
               </div>

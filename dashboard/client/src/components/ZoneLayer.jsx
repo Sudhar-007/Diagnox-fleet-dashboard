@@ -46,7 +46,7 @@ export default function ZoneLayer({ zones, compact = false }) {
           {!compact && (
             <Popup closeButton={false} autoPan={false}>
               <div className="min-w-44 space-y-1">
-                <div className="text-[15px] font-medium text-ink">{z.name}</div>
+                <div className="text-sm font-medium text-ink">{z.name}</div>
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[13px]">
                   <dt className="text-muted">Type</dt>
                   <dd className={z.type === 'restricted' ? 'text-crit' : 'text-ink'}>
@@ -59,7 +59,7 @@ export default function ZoneLayer({ zones, compact = false }) {
                   <dt className="text-muted">Applies to</dt>
                   <dd className="text-ink">{zoneScope(z)}</dd>
                 </dl>
-                <Link to={`/settings?zone=${encodeURIComponent(z.id)}`} className="text-sm text-ink underline underline-offset-4">
+                <Link to={`/settings?zone=${encodeURIComponent(z.id)}`} className="text-[13px] font-medium text-accent hover:underline">
                   Edit in Settings
                 </Link>
               </div>

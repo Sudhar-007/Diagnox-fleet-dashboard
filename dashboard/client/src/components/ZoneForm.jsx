@@ -8,6 +8,7 @@ import { ATTRIBUTION, DEFAULT_CENTER, DEFAULT_ZOOM, TILE_URL } from '../lib/mapT
 import { themeColor } from '../lib/theme.js';
 import { reloadZones } from '../hooks/useSocket.js';
 import { useFleetStore } from '../store/useFleetStore.js';
+import { toast } from '../lib/toast.js';
 
 function ClickToPlace({ onPick }) {
   useMapEvents({ click: (e) => onPick(e.latlng) });
@@ -108,6 +109,7 @@ export default function ZoneForm({ zone = null, onDone }) {
       if (zone) await sendJson(`/api/geofences/${encodeURIComponent(zone.id)}`, 'PUT', body);
       else await sendJson('/api/geofences', 'POST', body);
       await reloadZones();
+      toast(zone ? `Zone ${form.name.trim()} saved` : `Zone ${form.name.trim()} added`);
       onDone?.();
     } catch (err) {
       setError(err.message);
@@ -157,7 +159,7 @@ export default function ZoneForm({ zone = null, onDone }) {
           />
         </div>
 
-        <label className="flex items-start gap-2 text-[15px] text-ink">
+        <label className="flex items-start gap-2 text-sm text-ink">
           <input
             type="checkbox"
             checked={form.alert}
@@ -175,7 +177,7 @@ export default function ZoneForm({ zone = null, onDone }) {
 
         <fieldset>
           <legend className="mb-1 text-sm text-muted">Applies to</legend>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[15px] text-ink">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink">
             {[
               ['all', 'All trucks'],
               ['some', 'Selected trucks'],
@@ -196,7 +198,7 @@ export default function ZoneForm({ zone = null, onDone }) {
           {form.scope === 'some' && (
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
               {truckIds.map((id) => (
-                <label key={id} className="flex items-center gap-1.5 text-[15px] text-ink">
+                <label key={id} className="flex items-center gap-1.5 text-sm text-ink">
                   <input
                     type="checkbox"
                     checked={form.truck_ids.includes(id)}
@@ -214,7 +216,7 @@ export default function ZoneForm({ zone = null, onDone }) {
           <Button type="submit" variant="primary" disabled={saving}>
             {saving ? 'Saving…' : zone ? 'Save changes' : 'Add zone'}
           </Button>
-          <Button variant="quiet" onClick={onDone} disabled={saving}>
+          <Button variant="quiet" onClick={() => onDone?.()} disabled={saving}>
             Cancel
           </Button>
           {error && (

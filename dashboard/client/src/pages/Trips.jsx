@@ -6,7 +6,9 @@ import TripReplay from '../components/TripReplay.jsx';
 import TripTable from '../components/TripTable.jsx';
 import Button from '../components/ui/Button.jsx';
 import Field from '../components/ui/Field.jsx';
-import Panel, { EmptyState } from '../components/ui/Panel.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
+import Panel, { EmptyState, LoadingState } from '../components/ui/Panel.jsx';
+import Stat from '../components/ui/Stat.jsx';
 import Tabs, { TabPanel } from '../components/ui/Tabs.jsx';
 import { formatDuration } from '../lib/format.js';
 import { sortedTrips, startText } from '../lib/trips.js';
@@ -57,19 +59,10 @@ function CompletedTab({ trips }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <dl className="flex flex-wrap gap-x-8 gap-y-2">
-          <div>
-            <dt className="text-sm text-muted">Trips</dt>
-            <dd className="font-cond text-2xl font-bold">{shown.length}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-muted">Distance</dt>
-            <dd className="font-cond text-2xl font-bold">{km.toFixed(1)} km</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-muted">Time on the road</dt>
-            <dd className="font-cond text-2xl font-bold">{secs ? formatDuration(secs) : '0 min'}</dd>
-          </div>
+        <dl className="flex flex-wrap gap-x-10 gap-y-3">
+          <Stat label="Trips" value={shown.length} />
+          <Stat label="Distance" value={km.toFixed(1)} unit="km" />
+          <Stat label="Time on the road" value={secs ? formatDuration(secs) : '0 min'} />
         </dl>
         <Field as="select" label="Truck" value={truck} onChange={(e) => setTruck(e.target.value)} className="w-40">
           <option value="">All trucks</option>
@@ -140,17 +133,16 @@ export default function Trips() {
   }, [trips]);
 
   return (
-    <div className="mx-auto max-w-[1300px]">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h1 className="font-cond text-2xl font-bold">Trips</h1>
-        {tripRules && (
-          <p className="text-sm text-muted">
-            Detected from the readings: a trip starts after {tripRules.start_hold_s} s above {tripRules.start_speed_kmh} km/h
-            and ends after {tripRules.stop_hold_s / 60} min stopped or {tripRules.no_data_end_s / 60} min without data.
-          </p>
-        )}
-      </div>
-      <div className="mt-4">
+    <div className="mx-auto max-w-[1440px]">
+      <PageHeader
+        title="Trips"
+        description={
+          tripRules
+            ? `Detected from the readings: a trip starts after ${tripRules.start_hold_s} s above ${tripRules.start_speed_kmh} km/h and ends after ${tripRules.stop_hold_s / 60} min stopped or ${tripRules.no_data_end_s / 60} min without data.`
+            : 'Trips detected from the readings, planned trips and replay.'
+        }
+      />
+      <div>
         <Tabs
           label="Trip views"
           value={tab}
@@ -163,7 +155,9 @@ export default function Trips() {
         />
         <TabPanel id={tab}>
           {!trips ? (
-            <p className="text-[15px] text-muted">Loading trips…</p>
+            <Panel bodyClassName="">
+              <LoadingState>Loading trips…</LoadingState>
+            </Panel>
           ) : (
             <>
               {tab === 'active' && <ActiveTab trips={trips} />}

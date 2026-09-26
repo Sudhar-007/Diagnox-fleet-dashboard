@@ -13,6 +13,7 @@ import { themeColor } from '../lib/theme.js';
 import { startText } from '../lib/trips.js';
 import { reloadRegistry } from '../hooks/useSocket.js';
 import { useFleetStore } from '../store/useFleetStore.js';
+import { toast } from '../lib/toast.js';
 
 // Tank bar with percent and litres, badged by where the level comes from.
 export function FuelLevel({ fuel, provenance, compact = false }) {
@@ -21,14 +22,14 @@ export function FuelLevel({ fuel, provenance, compact = false }) {
     <div className={compact ? 'min-w-40' : 'max-w-sm'}>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-ink">
-          <span className="font-cond text-lg font-bold">{fuel.level_pct.toFixed(1)} %</span>{' '}
+          <span className="font-display text-lg font-semibold">{fuel.level_pct.toFixed(1)} %</span>{' '}
           <span className="text-muted">
             {Math.round(fuel.level_l)} of {fuel.capacity_l} L
           </span>
         </span>
         <ProvenanceBadge kind={levelBadge(fuel, provenance)} />
       </div>
-      <div className="mt-1 h-1.5 rounded-full bg-asphalt" role="presentation">
+      <div className="mt-1 h-1.5 rounded-full bg-subtle" role="presentation">
         <div className={`h-1.5 rounded-full ${levelTone(fuel.level_pct)}`} style={{ width: `${Math.max(0, Math.min(100, fuel.level_pct))}%` }} />
       </div>
     </div>
@@ -95,7 +96,7 @@ export function FuelTrend({ truckId }) {
             />
             <Tooltip
               cursor={{ stroke: themeColor('line') }}
-              contentStyle={{ background: themeColor('panel'), border: `1px solid ${themeColor('line')}`, fontSize: 12 }}
+              contentStyle={{ background: themeColor('surface'), border: `1px solid ${themeColor('line')}`, fontSize: 12 }}
               labelStyle={{ color: themeColor('muted') }}
               itemStyle={{ color: themeColor('ink') }}
               labelFormatter={clock}
@@ -120,13 +121,13 @@ export function FuelEvents({ events, showTruck = true, empty }) {
   if (events.length === 0) return <EmptyState>{empty}</EmptyState>;
   return (
     <table className="w-full min-w-[720px] text-left text-sm">
-      <thead className="border-b border-line text-muted">
+      <thead className="border-b border-line">
         <tr>
-          <th className="px-4 py-2 font-normal">When</th>
-          <th className="px-4 py-2 font-normal">What</th>
-          <th className="px-4 py-2 font-normal">Level</th>
-          {showTruck && <th className="px-4 py-2 font-normal">Truck</th>}
-          <th className="px-4 py-2 font-normal">Where</th>
+          <th className="px-4 py-2">When</th>
+          <th className="px-4 py-2">What</th>
+          <th className="px-4 py-2">Level</th>
+          {showTruck && <th className="px-4 py-2">Truck</th>}
+          <th className="px-4 py-2">Where</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-line">
@@ -187,6 +188,7 @@ export function RefuelForm({ truckId = null, onDone }) {
       const out = await sendJson('/api/refuels', 'POST', body);
       if (form.by.trim()) rememberName(form.by.trim());
       await reloadRegistry();
+      toast(`Refuel of ${body.litres} L recorded for ${form.truck_id}`);
       if (!out.applied_to_estimate) {
         setNote('Saved. The level is unchanged: this truck measures its level with a sensor, the refuel is from before tracking began (already in the full tank the estimate starts from), or the truck has not reported since the server started.');
         return;
@@ -227,7 +229,7 @@ export function RefuelForm({ truckId = null, onDone }) {
         <Button type="submit" variant="primary" disabled={saving || Boolean(note) || trucks.length === 0}>
           {saving ? 'Saving…' : 'Add refuel'}
         </Button>
-        <Button variant="quiet" onClick={onDone} disabled={saving}>
+        <Button variant="quiet" onClick={() => onDone?.()} disabled={saving}>
           {note ? 'Close' : 'Cancel'}
         </Button>
       </div>
@@ -247,6 +249,7 @@ function RemoveRefuel({ id }) {
     try {
       await sendJson(`/api/refuels/${encodeURIComponent(id)}`, 'DELETE');
       await reloadRegistry();
+      toast('Refuel removed');
     } catch (err) {
       setError(err.message);
       setConfirming(false);
@@ -280,14 +283,14 @@ export function RefuelList({ refuels, showTruck = true }) {
   if (refuels.length === 0) return <EmptyState>No refuels logged. Use Add refuel after filling a tank; the estimate rises by the litres.</EmptyState>;
   return (
     <table className="w-full min-w-[720px] text-left text-sm">
-      <thead className="border-b border-line text-muted">
+      <thead className="border-b border-line">
         <tr>
-          <th className="px-4 py-2 font-normal">When</th>
-          {showTruck && <th className="px-4 py-2 font-normal">Truck</th>}
-          <th className="px-4 py-2 font-normal">Litres</th>
-          <th className="px-4 py-2 font-normal">Cost</th>
-          <th className="px-4 py-2 font-normal">Notes</th>
-          <th className="px-4 py-2 font-normal">
+          <th className="px-4 py-2">When</th>
+          {showTruck && <th className="px-4 py-2">Truck</th>}
+          <th className="px-4 py-2">Litres</th>
+          <th className="px-4 py-2">Cost</th>
+          <th className="px-4 py-2">Notes</th>
+          <th className="px-4 py-2">
             <span className="sr-only">Actions</span>
           </th>
         </tr>

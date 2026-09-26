@@ -47,17 +47,17 @@ export default function TripTable({ trips, showTruck = true, empty }) {
 
   return (
     <table className="w-full min-w-[980px] text-left text-sm">
-      <thead className="border-b border-line text-muted">
+      <thead className="border-b border-line">
         <tr>
-          {showTruck && <th className="px-4 py-2 font-normal">Truck</th>}
-          <th className="px-4 py-2 font-normal">Started</th>
-          <th className="px-4 py-2 font-normal">Duration</th>
-          <th className="px-4 py-2 font-normal">Distance</th>
-          <th className="px-4 py-2 font-normal">Speed avg / max</th>
-          <th className="px-4 py-2 font-normal">From / to</th>
-          <th className="px-4 py-2 font-normal">During the trip</th>
-          <th className="px-4 py-2 font-normal">Driving score</th>
-          <th className="px-4 py-2 font-normal">
+          {showTruck && <th className="px-4 py-2">Truck</th>}
+          <th className="px-4 py-2">Started</th>
+          <th className="px-4 py-2">Duration</th>
+          <th className="px-4 py-2">Distance</th>
+          <th className="px-4 py-2">Speed avg / max</th>
+          <th className="px-4 py-2">From / to</th>
+          <th className="px-4 py-2">During the trip</th>
+          <th className="px-4 py-2">Driving score</th>
+          <th className="px-4 py-2">
             <span className="sr-only">Replay</span>
           </th>
         </tr>
@@ -111,7 +111,7 @@ export default function TripTable({ trips, showTruck = true, empty }) {
                 {t.has_path !== false ? (
                   <Link
                     to={`/trips?tab=replay&trip=${encodeURIComponent(t.id)}`}
-                    className="text-ink underline decoration-line underline-offset-4 hover:decoration-ink"
+                    className="font-medium text-accent hover:underline"
                   >
                     Replay
                   </Link>

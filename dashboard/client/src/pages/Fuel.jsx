@@ -6,7 +6,10 @@ import Plate from '../components/Plate.jsx';
 import ProvenanceBadge from '../components/ProvenanceBadge.jsx';
 import Button from '../components/ui/Button.jsx';
 import Field from '../components/ui/Field.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
 import Panel, { EmptyState } from '../components/ui/Panel.jsx';
+import Stat from '../components/ui/Stat.jsx';
+import { toast } from '../lib/toast.js';
 import { useRefuels } from '../hooks/useRefuels.js';
 import { useFleetStore } from '../store/useFleetStore.js';
 
@@ -16,25 +19,11 @@ function Consumption({ fuel }) {
   if (!fuel) return null;
   const idleShare = fuel.used_l > 0 ? Math.round((fuel.idle_l / fuel.used_l) * 100) : 0;
   return (
-    <dl className="flex flex-wrap gap-x-8 gap-y-2">
-      <div>
-        <dt className="text-sm text-muted">Used since {fuel.since.slice(11, 16)}</dt>
-        <dd className="font-cond text-2xl font-bold">{litres(fuel.used_l)}</dd>
-      </div>
-      <div>
-        <dt className="text-sm text-muted">Distance</dt>
-        <dd className="font-cond text-2xl font-bold">{fuel.distance_km.toFixed(1)} km</dd>
-      </div>
-      <div>
-        <dt className="text-sm text-muted">Economy</dt>
-        <dd className="font-cond text-2xl font-bold">{fuel.km_per_l != null ? `${fuel.km_per_l.toFixed(2)} km/L` : 'Not yet'}</dd>
-      </div>
-      <div>
-        <dt className="text-sm text-muted">Burnt idling</dt>
-        <dd className="font-cond text-2xl font-bold">
-          {litres(fuel.idle_l)} <span className="text-base font-normal text-muted">{idleShare} %</span>
-        </dd>
-      </div>
+    <dl className="flex flex-wrap gap-x-10 gap-y-3">
+      <Stat label={`Used since ${fuel.since.slice(11, 16)}`} value={fuel.used_l.toFixed(1)} unit="L" />
+      <Stat label="Distance" value={fuel.distance_km.toFixed(1)} unit="km" />
+      <Stat label="Economy" value={fuel.km_per_l != null ? fuel.km_per_l.toFixed(2) : 'Not yet'} unit={fuel.km_per_l != null ? 'km/L' : null} />
+      <Stat label="Burnt idling" value={fuel.idle_l.toFixed(1)} unit="L" note={`${idleShare} % of fuel used`} />
     </dl>
   );
 }
@@ -57,7 +46,7 @@ export function TruckFuel({ truckId, truck }) {
             <Consumption fuel={fuel} />
           </div>
         ) : (
-          <p className="text-[15px] text-muted">Fuel appears here once this truck starts reporting.</p>
+          <p className="text-sm text-muted">Fuel appears here once this truck starts reporting.</p>
         )}
       </Panel>
       {fuel && (
@@ -139,25 +128,25 @@ export default function Fuel() {
   const theftCount = (id) => (fuelEvents ?? []).filter((e) => e.truck_id === id && e.type === 'theft').length;
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h1 className="font-cond text-2xl font-bold">Fuel</h1>
-        <p className="text-sm text-muted">Since the server started; levels reset with it.</p>
-      </div>
+    <div className="mx-auto max-w-[1440px] space-y-4">
+      <PageHeader
+        title="Fuel"
+        description="Tank levels, consumption and possible theft since the server started. Levels reset when it restarts."
+      />
 
       <Panel title="Fleet fuel" bodyClassName="overflow-x-auto">
         {list.length === 0 ? (
           <EmptyState>Fuel appears once trucks start reporting.</EmptyState>
         ) : (
           <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="border-b border-line text-muted">
+            <thead className="border-b border-line">
               <tr>
-                <th className="px-4 py-2 font-normal">Truck</th>
-                <th className="px-4 py-2 font-normal">Level</th>
-                <th className="px-4 py-2 font-normal">Used</th>
-                <th className="px-4 py-2 font-normal">Economy</th>
-                <th className="px-4 py-2 font-normal">Burnt idling</th>
-                <th className="px-4 py-2 font-normal">Possible thefts</th>
+                <th className="px-4 py-2">Truck</th>
+                <th className="px-4 py-2">Level</th>
+                <th className="px-4 py-2">Used</th>
+                <th className="px-4 py-2">Economy</th>
+                <th className="px-4 py-2">Burnt idling</th>
+                <th className="px-4 py-2">Possible thefts</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -165,7 +154,7 @@ export default function Fuel() {
                 const f = t.fuel;
                 const thefts = theftCount(t.truck_id);
                 return (
-                  <tr key={t.truck_id} className={`align-top ${t.truck_id === selectedId ? 'bg-asphalt' : ''}`}>
+                  <tr key={t.truck_id} className={`align-top ${t.truck_id === selectedId ? 'bg-accent/5' : ''}`}>
                     <td className="px-4 py-2.5">
                       <button
                         type="button"

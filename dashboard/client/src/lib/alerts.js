@@ -48,6 +48,11 @@ export function openSos(alerts) {
     .sort((a, b) => b.opened_ms - a.opened_ms);
 }
 
+// SOS alert name for lists: the server's names mostly start with "SOS" already.
+export function sosLabel(a) {
+  return /^SOS\b/.test(a.name) ? a.name : `SOS: ${a.name}`;
+}
+
 export function isOpen(a) {
   return a.status !== 'RESOLVED';
 }

@@ -5,6 +5,7 @@ import Plate from '../components/Plate.jsx';
 import ProvenanceBadge from '../components/ProvenanceBadge.jsx';
 import ServiceRecordForm from '../components/ServiceRecordForm.jsx';
 import Button from '../components/ui/Button.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
 import Panel, { EmptyState } from '../components/ui/Panel.jsx';
 import { FIELD_LABEL } from '../lib/fields.js';
 import { mlMissingText } from '../lib/mlRisk.js';
@@ -15,9 +16,12 @@ import { useFleetStore } from '../store/useFleetStore.js';
 function ScoreBar({ score }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="w-8 text-right font-semibold text-ink">{score}</span>
-      <div className="h-1.5 w-32 rounded-sm bg-line" aria-hidden>
-        <div className="h-full rounded-sm bg-muted" style={{ width: `${Math.min(100, score)}%` }} />
+      <span className={`w-8 text-right font-semibold ${score >= 50 ? 'text-crit' : score >= 20 ? 'text-warn' : 'text-ink'}`}>{score}</span>
+      <div className="h-1.5 w-32 rounded-full bg-subtle" aria-hidden>
+        <div
+          className={`h-full rounded-full ${score >= 50 ? 'bg-crit' : score >= 20 ? 'bg-warn' : 'bg-idle'}`}
+          style={{ width: `${Math.min(100, score)}%` }}
+        />
       </div>
     </div>
   );
@@ -43,20 +47,18 @@ export default function Maintenance() {
   }, [trucks, registry, records, alerts]);
 
   return (
-    <div className="mx-auto max-w-[1300px] space-y-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <div>
-          <h1 className="font-cond text-2xl font-bold">Maintenance</h1>
-          <p className="text-sm text-muted">
-            Fleet ranked by rule-based risk over the last 10 minutes. Open a truck to see how its score is made up.
-          </p>
-        </div>
-        {!adding && (
-          <Button variant="primary" size="md" onClick={() => setAdding(true)}>
-            Add service record
-          </Button>
-        )}
-      </div>
+    <div className="mx-auto max-w-[1440px] space-y-4">
+      <PageHeader
+        title="Maintenance"
+        description="Fleet ranked by rule-based risk over the last 10 minutes. Open a truck to see how its score is made up."
+        actions={
+          !adding && (
+            <Button variant="primary" size="md" onClick={() => setAdding(true)}>
+              Add service record
+            </Button>
+          )
+        }
+      />
 
       {adding && (
         <Panel title="Add service record">
@@ -69,16 +71,16 @@ export default function Maintenance() {
           <EmptyState>No trucks yet.</EmptyState>
         ) : (
           <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="border-b border-line text-muted">
+            <thead className="border-b border-line">
               <tr>
-                <th className="px-4 py-2 font-normal">Truck</th>
-                <th className="px-4 py-2 font-normal">
+                <th className="px-4 py-2">Truck</th>
+                <th className="px-4 py-2">
                   Rule score <ProvenanceBadge kind="RULE_BASED" />
                 </th>
-                <th className="px-4 py-2 font-normal">Biggest contributor</th>
-                <th className="px-4 py-2 font-normal">ML score</th>
-                <th className="px-4 py-2 font-normal">Last service</th>
-                <th className="px-4 py-2 font-normal">Open alerts</th>
+                <th className="px-4 py-2">Biggest contributor</th>
+                <th className="px-4 py-2">ML score</th>
+                <th className="px-4 py-2">Last service</th>
+                <th className="px-4 py-2">Open alerts</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">

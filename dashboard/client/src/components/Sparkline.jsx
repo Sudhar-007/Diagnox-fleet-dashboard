@@ -6,7 +6,7 @@ function Tip({ active, payload, unit, digits }) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
-    <div className="rounded-[4px] border border-line bg-panel-hi px-2 py-1 text-xs">
+    <div className="rounded-md border border-line bg-surface px-2 py-1 text-xs shadow-sm">
       <span className="text-ink">
         {p.v.toFixed(digits)} {unit}
       </span>
@@ -15,15 +15,16 @@ function Tip({ active, payload, unit, digits }) {
   );
 }
 
-// One series, thin neutral line; dashed rules mark the warning / critical thresholds
-// (labelled, so the state is never carried by colour alone). Hover shows value + time.
+// One series, thin neutral line; dashed rules mark the warning / critical thresholds (the
+// Limits column beside it states them in words, so colour never carries them alone).
+// Hover shows value + time.
 export default function Sparkline({ points, field, unit, digits = 0, rules = [], label }) {
   const data = points
     .filter((p) => typeof p[field] === 'number')
     .map((p) => ({ t: new Date(p.timestamp).getTime(), ts: p.timestamp, v: p[field] }));
 
   if (data.length < 2) {
-    return <p className="flex h-20 items-center text-sm text-muted">Collecting data for the 5-minute trend.</p>;
+    return <p className="flex h-12 items-center text-[13px] text-muted">Collecting data for the 5-minute trend.</p>;
   }
 
   const values = data.map((d) => d.v);
@@ -34,9 +35,9 @@ export default function Sparkline({ points, field, unit, digits = 0, rules = [],
   const pad = (hi - lo || Math.abs(hi) || 1) * 0.08;
 
   return (
-    <div className="h-20" role="img" aria-label={`${label}, last 5 minutes, from ${Math.min(...values)} to ${Math.max(...values)} ${unit}`}>
+    <div className="h-12" role="img" aria-label={`${label}, last 5 minutes, from ${Math.min(...values)} to ${Math.max(...values)} ${unit}`}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 4, right: 58, bottom: 0, left: 0 }}>
+        <LineChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
           <XAxis dataKey="t" type="number" domain={['dataMin', 'dataMax']} hide />
           <YAxis domain={[lo - pad, hi + pad]} hide />
           {lines.map((r) => (
@@ -46,7 +47,6 @@ export default function Sparkline({ points, field, unit, digits = 0, rules = [],
               stroke={themeColor(r.level === 'critical' ? 'crit' : 'warn')}
               strokeDasharray="3 3"
               strokeOpacity={0.7}
-              label={{ value: `${r.level === 'critical' ? 'crit' : 'warn'} ${r.threshold}`, position: 'right', fill: themeColor('muted'), fontSize: 10 }}
             />
           ))}
           <Tooltip
@@ -54,7 +54,7 @@ export default function Sparkline({ points, field, unit, digits = 0, rules = [],
             cursor={{ stroke: themeColor('muted'), strokeWidth: 1 }}
             isAnimationActive={false}
           />
-          <Line type="monotone" dataKey="v" stroke={themeColor('ink')} strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Line type="monotone" dataKey="v" stroke={themeColor("ink")} strokeWidth={1.5} dot={false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

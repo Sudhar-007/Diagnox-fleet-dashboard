@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import Button from './ui/Button.jsx';
 import Plate from './Plate.jsx';
 import { formatPosition, openSos } from '../lib/alerts.js';
 import { formatClock, formatDuration } from '../lib/format.js';
 import { rememberedName, sendJson } from '../lib/api.js';
+import { toast } from '../lib/toast.js';
 import { queueAlertChange, useFleetStore } from '../store/useFleetStore.js';
 
 const SOUND_KEY = 'fleet.sosSound';
@@ -99,6 +99,7 @@ export default function SOSBanner() {
     try {
       const by = rememberedName().trim() || undefined;
       queueAlertChange(await sendJson(`/api/sos/${encodeURIComponent(sos.id)}`, 'PATCH', { status: 'ACKNOWLEDGED', by }));
+      toast(`SOS on ${sos.truck_id} acknowledged`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -107,40 +108,52 @@ export default function SOSBanner() {
   };
 
   return (
-    <div role="alert" className="border-b border-crit bg-crit/15 px-4 py-2.5 md:px-6">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[15px]">
-        <span className="rounded-[2px] bg-crit px-1.5 font-cond text-sm font-bold tracking-wide text-white">SOS</span>
+    <div role="alert" className="bg-crit px-4 py-2.5 text-white md:px-6">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        <span className="rounded-[3px] bg-white px-1.5 font-display text-sm font-semibold tracking-wide text-crit">SOS</span>
         <Plate truckId={sos.truck_id} size="sm" />
-        {sos.driver_name && <span className="text-ink">{sos.driver_name}</span>}
-        <span className="text-ink">{sos.name}</span>
-        <span className="text-muted">
+        <span className="font-medium">
+          {sos.name}
+          {sos.driver_name && <span className="font-normal text-white/85">, {sos.driver_name}</span>}
+        </span>
+        <span className="text-white/85">
           {formatPosition(sos.latitude, sos.longitude)} at {formatClock(sos.location_at)}
         </span>
-        <span className="text-muted">Open for {formatDuration((now + clockOffsetMs - sos.opened_ms) / 1000)}</span>
+        <span className="text-white/85">Open for {formatDuration((now + clockOffsetMs - sos.opened_ms) / 1000)}</span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <Link
             to={`/live?truck=${encodeURIComponent(sos.truck_id)}`}
-            className="rounded-[4px] border border-line px-2.5 py-1 text-sm font-medium text-ink hover:bg-panel-hi"
+            className="inline-flex h-7 items-center rounded-md border border-white/60 px-2.5 text-[13px] font-medium text-white hover:bg-white/10"
           >
             View on map
           </Link>
-          <Button variant="danger" onClick={acknowledge} disabled={busy}>
+          <button
+            type="button"
+            onClick={acknowledge}
+            disabled={busy}
+            className="inline-flex h-7 items-center rounded-md bg-white px-3 text-[13px] font-semibold text-crit hover:bg-white/90 disabled:opacity-60"
+          >
             {busy ? 'Saving…' : 'Acknowledge'}
-          </Button>
-          <Button variant="quiet" onClick={toggleSound} aria-pressed={sound}>
+          </button>
+          <button
+            type="button"
+            onClick={toggleSound}
+            aria-pressed={sound}
+            className="inline-flex h-7 items-center rounded-md px-2 text-[13px] text-white/85 hover:bg-white/10 hover:text-white"
+          >
             Sound {sound ? 'on' : 'off'}
-          </Button>
+          </button>
         </div>
       </div>
       {(active.length > 1 || error || soundBlocked) && (
-        <div className="mt-1.5 flex flex-wrap gap-x-4 text-sm">
+        <div className="mt-1.5 flex flex-wrap gap-x-4 text-[13px]">
           {active.length > 1 && (
-            <Link to="/alerts" className="text-ink underline decoration-line underline-offset-4">
+            <Link to="/alerts" className="font-medium underline underline-offset-4">
               {active.length - 1} more active SOS
             </Link>
           )}
-          {soundBlocked && <span className="text-ink">Click anywhere on the page to enable the SOS sound.</span>}
-          {error && <span className="text-crit">{error}</span>}
+          {soundBlocked && <span>Click anywhere on the page to enable the SOS sound.</span>}
+          {error && <span className="rounded bg-white px-1.5 text-crit">{error}</span>}
         </div>
       )}
     </div>

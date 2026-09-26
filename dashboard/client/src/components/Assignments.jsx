@@ -10,6 +10,7 @@ import { formatDuration } from '../lib/format.js';
 import { linkAssignments, startText } from '../lib/trips.js';
 import { reloadRegistry } from '../hooks/useSocket.js';
 import { useFleetStore } from '../store/useFleetStore.js';
+import { toast } from '../lib/toast.js';
 
 // "2026-09-25T14:30" in local time, rounded up to the next quarter hour.
 function nextQuarterHour() {
@@ -46,6 +47,7 @@ export function AssignmentForm({ truckId = null, onDone }) {
       await sendJson('/api/trip-assignments', 'POST', { ...form, driver_id });
       if (form.by.trim()) rememberName(form.by.trim());
       await reloadRegistry();
+      toast(`Trip planned for ${form.truck_id}`);
       onDone?.();
     } catch (err) {
       setError(err.message);
@@ -81,7 +83,7 @@ export function AssignmentForm({ truckId = null, onDone }) {
         <Button type="submit" variant="primary" disabled={saving || trucks.length === 0}>
           {saving ? 'Saving…' : 'Add trip assignment'}
         </Button>
-        <Button variant="quiet" onClick={onDone} disabled={saving}>
+        <Button variant="quiet" onClick={() => onDone?.()} disabled={saving}>
           Cancel
         </Button>
       </div>
@@ -101,6 +103,7 @@ function Remove({ id }) {
     try {
       await sendJson(`/api/trip-assignments/${encodeURIComponent(id)}`, 'DELETE');
       await reloadRegistry();
+      toast('Planned trip removed');
     } catch (err) {
       setError(err.message);
       setConfirming(false);
@@ -138,7 +141,7 @@ function Status({ link, serverNow }) {
         <span className="text-muted">, started {startText(trip.start_at, serverNow)} </span>
         <Link
           to={`/trips?tab=replay&trip=${encodeURIComponent(trip.id)}`}
-          className="text-ink underline decoration-line underline-offset-4 hover:decoration-ink"
+          className="font-medium text-accent hover:underline"
         >
           Replay
         </Link>
@@ -168,15 +171,15 @@ export function AssignmentList({ assignments, showTruck = true }) {
   }
   return (
     <table className="w-full min-w-[860px] text-left text-sm">
-      <thead className="border-b border-line text-muted">
+      <thead className="border-b border-line">
         <tr>
-          <th className="px-4 py-2 font-normal">Planned start</th>
-          {showTruck && <th className="px-4 py-2 font-normal">Truck</th>}
-          <th className="px-4 py-2 font-normal">Driver</th>
-          <th className="px-4 py-2 font-normal">Route</th>
-          <th className="px-4 py-2 font-normal">Cargo</th>
-          <th className="px-4 py-2 font-normal">Status</th>
-          <th className="px-4 py-2 font-normal">
+          <th className="px-4 py-2">Planned start</th>
+          {showTruck && <th className="px-4 py-2">Truck</th>}
+          <th className="px-4 py-2">Driver</th>
+          <th className="px-4 py-2">Route</th>
+          <th className="px-4 py-2">Cargo</th>
+          <th className="px-4 py-2">Status</th>
+          <th className="px-4 py-2">
             <span className="sr-only">Actions</span>
           </th>
         </tr>

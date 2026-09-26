@@ -18,5 +18,5 @@ export function levelTone(pct) {
   if (pct == null) return 'bg-faint';
   if (pct < 15) return 'bg-crit';
   if (pct < 30) return 'bg-warn';
-  return 'bg-muted';
+  return 'bg-idle';
 }

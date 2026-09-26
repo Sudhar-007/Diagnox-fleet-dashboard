@@ -9,18 +9,18 @@ import { useFleetStore } from '../store/useFleetStore.js';
 const LEVEL_DOT = { critical: 'bg-crit', warning: 'bg-warn' };
 
 const STATUS_STYLE = {
-  ACTIVE: { critical: 'border-crit text-crit', warning: 'border-warn text-warn' },
-  ACKNOWLEDGED: 'border-line text-muted',
+  ACTIVE: { critical: 'border-crit/40 bg-crit/5 text-crit', warning: 'border-warn/40 bg-warn/5 text-warn' },
+  ACKNOWLEDGED: 'border-line-strong text-muted',
   RESOLVED: 'border-line text-faint',
 };
+
+const STATUS_LABEL = { ACTIVE: 'Active', ACKNOWLEDGED: 'Acknowledged', RESOLVED: 'Resolved' };
 
 function StatusChip({ alert }) {
   const style = STATUS_STYLE[alert.status];
   const cls = typeof style === 'string' ? style : style[alert.level];
   return (
-    <span className={`rounded-[2px] border px-1.5 py-px font-cond text-[11px] font-medium leading-4 tracking-wide ${cls}`}>
-      {alert.status}
-    </span>
+    <span className={`rounded-[3px] border px-1.5 text-xs leading-5 font-medium ${cls}`}>{STATUS_LABEL[alert.status] ?? alert.status}</span>
   );
 }
 
@@ -69,19 +69,26 @@ export default function AlertRow({ alert, actions = true }) {
   const live = truck?.[alert.field];
 
   return (
-    <li className="px-4 py-3">
+    <li
+      className={`border-l-[3px] px-4 py-3 ${
+        alert.kind === 'sos' && open ? 'border-crit bg-crit/5' : alert.level === 'critical' && alert.status === 'ACTIVE' ? 'border-crit/60' : 'border-transparent'
+      }`}
+    >
       <div className="flex items-start gap-3">
-        <span aria-hidden className={`mt-2 size-2 shrink-0 rounded-full ${LEVEL_DOT[alert.level] ?? 'bg-idle'}`} />
+        <span aria-hidden className={`mt-1.5 size-2 shrink-0 rounded-full ${LEVEL_DOT[alert.level] ?? 'bg-idle'}`} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-            <p className="text-[15px] text-ink">{alertText(alert)}</p>
+            <p className={`text-sm ${alert.kind === 'sos' && open ? 'font-semibold text-crit' : 'font-medium text-ink'}`}>
+              {alert.kind === 'sos' && <span className="mr-2 rounded-[3px] bg-crit px-1.5 py-px text-xs font-semibold text-white">SOS</span>}
+              {alertText(alert)}
+            </p>
             <div className="flex shrink-0 items-center gap-2">
               <StatusChip alert={alert} />
               <ProvenanceBadge kind={alert.source} />
             </div>
           </div>
 
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted">
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] text-muted">
             {alert.driver_name && <span>{alert.driver_name}</span>}
             {open ? (
               <span>Open for {formatDuration((now + clockOffsetMs - alert.opened_ms) / 1000)}</span>
@@ -105,13 +112,13 @@ export default function AlertRow({ alert, actions = true }) {
           </div>
 
           {alert.kind === 'geofence' && (
-            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted">
+            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] text-muted">
               <span>
                 {alert.zone_type === 'restricted' ? 'Restricted zone' : 'Allowed zone'} {alert.zone_name}
               </span>
               <Link
                 to={`/live?truck=${encodeURIComponent(alert.truck_id)}`}
-                className="text-ink underline decoration-line underline-offset-4 hover:decoration-ink"
+                className="font-medium text-accent hover:underline"
               >
                 View on map
               </Link>
@@ -119,13 +126,13 @@ export default function AlertRow({ alert, actions = true }) {
           )}
 
           {alert.kind === 'sos' && (
-            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted">
+            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] text-muted">
               <span>
                 Last position {formatPosition(alert.latitude, alert.longitude)} at {formatClock(alert.location_at)}
               </span>
               <Link
                 to={`/live?truck=${encodeURIComponent(alert.truck_id)}`}
-                className="text-ink underline decoration-line underline-offset-4 hover:decoration-ink"
+                className="font-medium text-accent hover:underline"
               >
                 View on map
               </Link>
@@ -134,13 +141,13 @@ export default function AlertRow({ alert, actions = true }) {
           )}
 
           {alert.acknowledged_at && (
-            <p className="mt-1 text-sm text-muted">
+            <p className="mt-1 text-[13px] text-muted">
               Acknowledged{alert.acknowledged_by ? ` by ${alert.acknowledged_by}` : ''} at {alert.acknowledged_at.slice(11)}
               {alert.ack_note && <span className="text-ink">: {alert.ack_note}</span>}
             </p>
           )}
           {alert.resolved_at && (
-            <p className="mt-1 text-sm text-muted">
+            <p className="mt-1 text-[13px] text-muted">
               {alert.resolution === 'manual'
                 ? `Resolved${alert.resolved_by ? ` by ${alert.resolved_by}` : ''} at ${alert.resolved_at.slice(11)}`
                 : `${resolutionText(alert)} at ${alert.resolved_at.slice(11)}`}

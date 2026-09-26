@@ -23,14 +23,14 @@ export default function DrivingEvents({ events, showDriver = true, empty }) {
 
   return (
     <table className="w-full min-w-[820px] text-left text-sm">
-      <thead className="border-b border-line text-muted">
+      <thead className="border-b border-line">
         <tr>
-          <th className="px-4 py-2 font-normal">When</th>
-          <th className="px-4 py-2 font-normal">Event</th>
-          <th className="px-4 py-2 font-normal">What happened</th>
-          {showDriver && <th className="px-4 py-2 font-normal">Driver</th>}
-          <th className="px-4 py-2 font-normal">Trip</th>
-          <th className="px-4 py-2 text-right font-normal">Cost</th>
+          <th className="px-4 py-2">When</th>
+          <th className="px-4 py-2">Event</th>
+          <th className="px-4 py-2">What happened</th>
+          {showDriver && <th className="px-4 py-2">Driver</th>}
+          <th className="px-4 py-2">Trip</th>
+          <th className="px-4 py-2 text-right">Cost</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-line">
@@ -56,7 +56,7 @@ export default function DrivingEvents({ events, showDriver = true, empty }) {
                 {trip ? (
                   <Link
                     to={`/trips?tab=replay&trip=${encodeURIComponent(trip.id)}`}
-                    className="text-ink underline decoration-line underline-offset-4 hover:decoration-ink"
+                    className="font-medium text-accent hover:underline"
                   >
                     Replay {startText(trip.start_at, now + clockOffsetMs)}
                   </Link>

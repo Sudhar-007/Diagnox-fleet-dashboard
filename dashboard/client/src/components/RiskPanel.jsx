@@ -18,9 +18,9 @@ export default function RiskPanel({ truck }) {
           <div className="flex items-center gap-2 text-sm text-muted">
             Rule score <ProvenanceBadge kind="RULE_BASED" />
           </div>
-          <div className="mt-1 font-cond text-4xl font-bold leading-none">
+          <div className="mt-1 font-display text-[28px] leading-8 font-semibold">
             {truck.rule_risk_score ?? 0}
-            <span className="ml-1 text-lg font-medium text-muted">/ 100</span>
+            <span className="ml-1 text-sm font-normal text-muted">/ 100</span>
           </div>
         </div>
         <div>
@@ -28,12 +28,12 @@ export default function RiskPanel({ truck }) {
             ML score {typeof mlScore === 'number' && <ProvenanceBadge kind={mlBadgeKind(truck)} />}
           </div>
           {typeof mlScore === 'number' ? (
-            <div className="mt-1 font-cond text-4xl font-bold leading-none">
+            <div className="mt-1 font-display text-[28px] leading-8 font-semibold">
               {mlScore}
-              <span className="ml-1 text-lg font-medium text-muted">/ 100</span>
+              <span className="ml-1 text-sm font-normal text-muted">/ 100</span>
             </div>
           ) : (
-            <p className="mt-2 text-[15px] text-muted">ML model: {mlMissingText(ml).toLowerCase()}</p>
+            <p className="mt-2 text-sm text-muted">ML model: {mlMissingText(ml).toLowerCase()}</p>
           )}
         </div>
       </div>
@@ -55,17 +55,17 @@ export default function RiskPanel({ truck }) {
       )}
 
       {breakdown.length === 0 ? (
-        <p className="text-[15px] text-muted">Nothing has been past a warning threshold in the last 10 minutes.</p>
+        <p className="text-sm text-muted">Nothing has been past a warning threshold in the last 10 minutes.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[620px] text-left text-sm">
-            <thead className="border-b border-line text-muted">
+            <thead className="border-b border-line">
               <tr>
-                <th className="py-2 pr-4 font-normal">Reading</th>
-                <th className="py-2 pr-4 font-normal">Rule</th>
-                <th className="py-2 pr-4 font-normal">Time past warning</th>
-                <th className="py-2 pr-4 font-normal">How far past</th>
-                <th className="py-2 pr-4 font-normal">Weight</th>
+                <th className="py-2 pr-4">Reading</th>
+                <th className="py-2 pr-4">Rule</th>
+                <th className="py-2 pr-4">Time past warning</th>
+                <th className="py-2 pr-4">How far past</th>
+                <th className="py-2 pr-4">Weight</th>
                 <th className="py-2 font-normal text-right">Points</th>
               </tr>
             </thead>
