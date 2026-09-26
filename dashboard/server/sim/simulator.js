@@ -317,7 +317,7 @@ function updateFuel(truck, point, dt) {
     if (truck.fuelPct >= 100) truck.refilling = false;
   }
   truck.fuelPct = clamp(truck.fuelPct, 0, 100);
-  point.fuel_level = round(truck.fuelPct, 1);
+  point.fuel_level = round(truck.fuelPct, 2);
 }
 
 export function createSimulator({ routes, truckIds = Object.keys(routes), fuelSensors = FUEL_SENSOR_TRUCKS }) {

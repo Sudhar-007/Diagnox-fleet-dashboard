@@ -115,7 +115,11 @@ test('service: manager refuel raises the estimate once tracking has begun', () =
   assert.equal(svc.refuel('TN01', 50, formatTs(T0 - 60_000)), false, 'before tracking began');
   assert.equal(svc.refuel('TN01', 50, formatTs(T0 + 3000_000)), true);
   assert.equal(svc.of('TN01').level_l, 300, 'capped at a full tank');
-  assert.ok(svc.history('TN01').length >= 120, 'a sample every 30 s');
+  const rows = svc.history('TN01');
+  assert.ok(rows.length >= 120, 'a sample every 30 s');
+  const last = rows.at(-1);
+  assert.equal(last.length, 5);
+  assert.equal(last[4], svc.of('TN01').distance_km, 'rows carry the cumulative distance');
   assert.equal(svc.history('NOPE'), null);
 });
 

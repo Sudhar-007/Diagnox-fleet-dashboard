@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import Plate from './Plate.jsx';
 import ProvenanceBadge from './ProvenanceBadge.jsx';
@@ -68,13 +68,69 @@ export function FuelTrend({ truckId }) {
   if (state.error && !state.rows) return <EmptyState>{state.error}</EmptyState>;
   if (!state.rows) return <EmptyState>Loading fuel trend…</EmptyState>;
   if (state.rows.length < 2) return <EmptyState>Not enough readings yet for a trend.</EmptyState>;
-  const data = state.rows.map(([t, pct]) => ({ t, pct }));
+  return <FuelTrendChart rows={state.rows} />;
+}
+
+// A tank drains a few percent an hour, so a 0 to 100 % scale hides the trend: the scale is
+// fitted to the readings (on round steps) and the caption says where it starts.
+function levelScale(values) {
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const pad = Math.max(1, (max - min) * 0.15);
+  const span = max - min + 2 * pad;
+  const step = span <= 8 ? 1 : span <= 16 ? 2 : span <= 40 ? 5 : span <= 80 ? 10 : 25;
+  const lo = Math.max(0, Math.floor((min - pad) / step) * step);
+  const hi = Math.min(100, Math.ceil((max + pad) / step) * step);
+  const ticks = [];
+  for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(Math.round(v * 10) / 10);
+  // Keep the axis readable: at most 6 labels.
+  const every = Math.ceil(ticks.length / 6);
+  return { domain: [lo, hi], ticks: ticks.filter((_, i) => i % every === 0 || i === ticks.length - 1) };
+}
+
+const km = (v) => (v >= 10 ? Math.round(v) : v.toFixed(1));
+
+function TrendTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="rounded-md border border-line bg-surface px-3 py-2 text-xs shadow-sm">
+      <div className="text-muted">{clock(d.t)}</div>
+      <div className="mt-0.5 font-medium text-ink">{d.pct.toFixed(1)} % in the tank</div>
+      <div className="text-muted">
+        {d.used.toFixed(1)} L used{d.km != null ? `, ${km(d.km)} km driven` : ''} since {clock(d.t0)}
+      </div>
+    </div>
+  );
+}
+
+function FuelTrendChart({ rows }) {
+  const [t0, , , used0 = 0, km0] = rows[0];
+  const data = rows.map(([t, pct, , used = 0, dist]) => ({
+    t,
+    t0,
+    pct,
+    used: Math.max(0, used - used0),
+    km: typeof dist === 'number' && typeof km0 === 'number' ? Math.max(0, dist - km0) : null,
+  }));
+  const first = data[0];
+  const last = data[data.length - 1];
+  const { domain, ticks } = levelScale(data.map((d) => d.pct));
+  const drop = first.pct - last.pct;
+  const accent = themeColor('accent');
 
   return (
     <figure>
-      <div className="h-48">
+      <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="fuel-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={accent} stopOpacity={0.18} />
+                <stop offset="100%" stopColor={accent} stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} stroke={themeColor('line')} strokeDasharray="0" />
             <XAxis
               dataKey="t"
               type="number"
@@ -86,28 +142,35 @@ export function FuelTrend({ truckId }) {
               minTickGap={40}
             />
             <YAxis
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
-              width={36}
+              domain={domain}
+              ticks={ticks}
+              allowDataOverflow
+              width={40}
               unit="%"
               tick={{ fill: themeColor('muted'), fontSize: 11 }}
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip
-              cursor={{ stroke: themeColor('line') }}
-              contentStyle={{ background: themeColor('surface'), border: `1px solid ${themeColor('line')}`, fontSize: 12 }}
-              labelStyle={{ color: themeColor('muted') }}
-              itemStyle={{ color: themeColor('ink') }}
-              labelFormatter={clock}
-              formatter={(v) => [`${v.toFixed(1)} %`, 'Level']}
+            <Tooltip cursor={{ stroke: themeColor('line-strong') }} content={<TrendTooltip />} />
+            <Area
+              dataKey="pct"
+              type="monotone"
+              baseValue={domain[0]}
+              stroke={accent}
+              strokeWidth={2}
+              fill="url(#fuel-fill)"
+              dot={false}
+              activeDot={{ r: 4, stroke: themeColor('surface'), strokeWidth: 2, fill: accent }}
+              isAnimationActive={false}
             />
-            <Line dataKey="pct" dot={false} stroke={themeColor('ink')} strokeWidth={2} isAnimationActive={false} />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
       <figcaption className="mt-1 text-xs text-muted">
-        Tank level from {clock(data[0].t)} to {clock(data[data.length - 1].t)}, one reading every 30 s.
+        {drop >= 0.05 ? `Down ${drop.toFixed(1)} %` : drop <= -0.05 ? `Up ${(-drop).toFixed(1)} %` : 'Level unchanged'}
+        {`, ${last.used.toFixed(1)} L used`}
+        {last.km != null ? ` over ${km(last.km)} km` : ''} from {clock(first.t)} to {clock(last.t)}, one reading every 30 s.
+        {domain[0] > 0 ? ` Scale starts at ${domain[0]} %.` : ''}
       </figcaption>
     </figure>
   );

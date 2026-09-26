@@ -1,12 +1,15 @@
-import { useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import FleetMap from '../components/FleetMap.jsx';
 import FleetTable from '../components/FleetTable.jsx';
 import Plate from '../components/Plate.jsx';
+import ReadingsTable from '../components/ReadingsTable.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
+import { LiveReadings, VehicleFocus } from '../components/TruckFocus.jsx';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import Panel, { EmptyState } from '../components/ui/Panel.jsx';
+import Tabs, { TabPanel } from '../components/ui/Tabs.jsx';
 import { API_URL } from '../config.js';
 import { byUrgency as alertUrgency, eventDescription, isOpen, ruleReading, sosLabel } from '../lib/alerts.js';
 import { byUrgency, useFleetRows } from '../lib/fleetView.js';
@@ -15,34 +18,61 @@ import { useFleetStore } from '../store/useFleetStore.js';
 
 const linkClass = 'text-[13px] font-medium text-accent hover:underline';
 
-// One strip, six answers: how many trucks, how many live, who needs attention, who went
-// quiet, any SOS, any open alert. Each figure links to where it can be acted on.
+// One strip, eight answers: how many trucks, moving, parked, who needs attention, who went
+// quiet, any SOS, any open alert, how much fuel. Each figure links to where it can be acted on.
 function StatusStrip({ rows, openAlerts }) {
-  const live = rows.filter((r) => r.freshness === 'live').length;
+  const liveRows = rows.filter((r) => r.freshness === 'live');
+  const moving = liveRows.filter((r) => r.truck.speed > 0);
+  const parked = liveRows.filter((r) => !(r.truck.speed > 0));
+  const idling = parked.filter((r) => r.truck.rpm > 0).length;
+  const avgSpeed = moving.length ? Math.round(moving.reduce((sum, r) => sum + r.truck.speed, 0) / moving.length) : null;
   const attention = rows.filter((r) => r.attention).length;
   const silent = rows.filter((r) => r.silent).length;
   const sos = openAlerts.filter((a) => a.kind === 'sos').length;
   const health = openAlerts.filter((a) => a.kind !== 'sos');
-  const critical = health.some((a) => a.level === 'critical');
+  const critical = health.filter((a) => a.level === 'critical').length;
+  const fuelled = rows.filter((r) => typeof r.truck.fuel?.level_pct === 'number');
+  const avgFuel = fuelled.length ? fuelled.reduce((sum, r) => sum + r.truck.fuel.level_pct, 0) / fuelled.length : null;
+  const lowest = fuelled.reduce((m, r) => (!m || r.truck.fuel.level_pct < m.truck.fuel.level_pct ? r : m), null);
 
   const cells = [
-    { label: 'Trucks', value: rows.length, to: '/vehicles' },
-    { label: 'Live', value: live, to: '/live', tone: live < rows.length ? 'text-ink' : 'text-ok' },
-    { label: 'Need attention', value: attention, to: '/vehicles?status=attention', tone: attention ? 'text-warn' : 'text-ink' },
-    { label: 'No recent data', value: silent, to: '/vehicles?status=silent', tone: silent ? 'text-idle' : 'text-ink' },
-    { label: 'Active SOS', value: sos, to: '/alerts', tone: sos ? 'text-crit' : 'text-ink' },
-    { label: 'Open alerts', value: health.length, to: '/alerts', tone: health.length ? (critical ? 'text-crit' : 'text-warn') : 'text-ink' },
+    { label: 'Trucks', value: rows.length, note: `${liveRows.length} reporting live`, to: '/vehicles' },
+    { label: 'Moving', value: moving.length, note: avgSpeed != null ? `Average ${avgSpeed} km/h` : 'None on the move', to: '/live' },
+    { label: 'Parked', value: parked.length, note: idling ? `${idling} with engine idling` : 'Engines off', to: '/live' },
+    {
+      label: 'Need attention',
+      value: attention,
+      note: 'Health issue or SOS',
+      to: '/vehicles?status=attention',
+      tone: attention ? 'text-warn' : 'text-ink',
+    },
+    { label: 'No recent data', value: silent, note: 'Stale or offline', to: '/vehicles?status=silent', tone: silent ? 'text-idle' : 'text-ink' },
+    { label: 'Active SOS', value: sos, note: sos ? 'Respond now' : 'All clear', to: '/alerts', tone: sos ? 'text-crit' : 'text-ink' },
+    {
+      label: 'Open alerts',
+      value: health.length,
+      note: critical ? `${critical} critical` : health.length ? 'Warnings only' : 'Nothing open',
+      to: '/alerts',
+      tone: health.length ? (critical ? 'text-crit' : 'text-warn') : 'text-ink',
+    },
+    {
+      label: 'Average fuel',
+      value: avgFuel != null ? `${avgFuel.toFixed(1)} %` : '-',
+      note: lowest ? `Lowest ${lowest.truck.truck_id}, ${lowest.truck.fuel.level_pct.toFixed(0)} %` : 'No fuel data',
+      to: '/fuel',
+    },
   ];
 
   return (
     <section
       aria-label="Fleet status"
-      className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-3 xl:grid-cols-6"
+      className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-4 2xl:grid-cols-8"
     >
       {cells.map((c) => (
         <Link key={c.label} to={c.to} className="group bg-surface px-4 py-3 transition-colors hover:bg-subtle">
           <div className="text-xs text-muted group-hover:text-ink">{c.label}</div>
-          <div className={`mt-0.5 font-display text-xl leading-7 font-semibold ${c.tone ?? 'text-ink'}`}>{c.value}</div>
+          <div className={`mt-0.5 font-display text-xl leading-7 font-semibold tabular-nums ${c.tone ?? 'text-ink'}`}>{c.value}</div>
+          <div className="truncate text-xs text-muted">{c.note}</div>
         </Link>
       ))}
     </section>
@@ -200,11 +230,18 @@ export default function Dashboard() {
   const alerts = useFleetStore((s) => s.alerts);
   const connection = useFleetStore((s) => s.connection);
   const syncError = useFleetStore((s) => s.syncError);
-  const navigate = useNavigate();
+  const [focusId, setFocusId] = useState(null);
+  const [tab, setTab] = useState('summary');
 
   const trucks = useMemo(() => rows.map((r) => r.truck), [rows]);
   const openAlerts = useMemo(() => Object.values(alerts).filter(isOpen).sort(alertUrgency), [alerts]);
   const live = rows.filter((r) => r.freshness === 'live').length;
+
+  // Opens on the most urgent truck, then stays on whatever the user picks.
+  useEffect(() => {
+    if (!focusId && rows.length) setFocusId([...rows].sort(byUrgency)[0].truck.truck_id);
+  }, [focusId, rows]);
+  const focusRow = rows.find((r) => r.truck.truck_id === focusId) ?? rows[0];
 
   return (
     <div className="mx-auto max-w-[1440px]">
@@ -222,20 +259,26 @@ export default function Dashboard() {
           <div className="grid gap-4 lg:grid-cols-3">
             <Panel
               title="Live positions"
+              description="Select a truck on the map to focus it"
               actions={
                 <Link to="/live" className={linkClass}>
                   Open live map
                 </Link>
               }
-              bodyClassName="h-[420px]"
+              bodyClassName="h-[440px]"
               className="overflow-hidden lg:col-span-2"
             >
-              <FleetMap trucks={trucks} compact onSelect={(id) => navigate(`/live?truck=${encodeURIComponent(id)}`)} />
+              <FleetMap trucks={trucks} compact selectedId={focusRow.truck.truck_id} onSelect={setFocusId} />
             </Panel>
-            <div className="space-y-4">
-              <NeedsAttention rows={rows} />
-              <OpenAlerts alerts={openAlerts} />
-            </div>
+            <VehicleFocus rows={rows} truckId={focusRow.truck.truck_id} onChange={setFocusId} />
+          </div>
+
+          <LiveReadings row={focusRow} />
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <NeedsAttention rows={rows} />
+            <OpenAlerts alerts={openAlerts} />
+            <RecentActivity />
           </div>
 
           <Panel
@@ -246,12 +289,23 @@ export default function Dashboard() {
                 Manage vehicles
               </Link>
             }
-            bodyClassName="overflow-x-auto"
+            bodyClassName="pt-1"
           >
-            <FleetTable rows={rows} />
+            <div className="px-4">
+              <Tabs
+                label="Fleet view"
+                value={tab}
+                onChange={setTab}
+                tabs={[
+                  { id: 'summary', label: 'Summary' },
+                  { id: 'readings', label: 'Latest readings' },
+                ]}
+              />
+            </div>
+            <TabPanel id={tab}>
+              <div className="-mt-4 overflow-x-auto">{tab === 'summary' ? <FleetTable rows={rows} /> : <ReadingsTable rows={rows} />}</div>
+            </TabPanel>
           </Panel>
-
-          <RecentActivity />
         </div>
       )}
     </div>
