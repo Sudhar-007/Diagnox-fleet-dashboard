@@ -88,12 +88,12 @@ test('api key comparison', () => {
 });
 
 // Server with a simulator source that never ticks on its own; `sim(points)` feeds it by hand.
-async function server({ key = KEY, accepts = true, simIds = [] } = {}) {
+async function server({ key = KEY, accepts = true, simIds = [], log = quiet } = {}) {
   let feed;
   const bff = createServer({
     rules,
     allowedOrigins: ['http://localhost:5173'],
-    log: quiet,
+    log,
     telemetryKey: key,
     makeSource: (onPoints) => {
       feed = onPoints;
@@ -202,6 +202,31 @@ test('HTTP: a device may not use a simulated truck id', async () => {
     assert.deepEqual(out.rejected, [{ index: 0, error: 'truck_id TN01 is a simulated truck; use another id' }]);
     const { trucks } = await s.get('/trucks');
     assert.deepEqual(trucks.map((t) => t.truck_id), ['TN06']);
+  } finally {
+    await s.bff.close();
+  }
+});
+
+test('HTTP: every outcome is logged in one line, without the key or the body', async () => {
+  const lines = [];
+  const log = { ...quiet, log: (line) => lines.push(line) };
+  const s = await server({ log });
+  try {
+    const ts = ago(2);
+    await s.post([reading({ truck_id: 'TN07', timestamp: ts }), reading({ truck_id: 'TN08', timestamp: ts, speed: 999 })]);
+    assert.equal(lines.at(-1), `[telemetry] 200 TN07,TN08 accepted 1 ignored 0 rejected 1 newest ${ts}; rejected #1: speed must be from 0 to 300`);
+
+    // Wrong key: logged once, repeats within the minute are held back.
+    await s.post(reading(), { 'x-api-key': 'nope' });
+    await s.post(reading(), { 'x-api-key': 'nope' });
+    assert.equal(lines.filter((l) => l.includes('401')).length, 1);
+    assert.equal(lines.at(-1), '[telemetry] 401 refused: missing or wrong x-api-key');
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    assert.equal((await s.post('{not json')).status, 400);
+    assert.equal(lines.at(-1), '[telemetry] 400 body is not valid JSON');
+
+    assert.ok(lines.every((l) => !l.includes(KEY) && !l.includes('coolant')));
   } finally {
     await s.bff.close();
   }

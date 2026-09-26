@@ -281,6 +281,7 @@ export function createServer({
       reserved: (id) => simIds.has(id),
       maxPastS: rules.ingest.max_past_s,
       ingest: ingestDevice,
+      log,
     }),
   );
   app.use(express.json({ limit: '100kb' }));
